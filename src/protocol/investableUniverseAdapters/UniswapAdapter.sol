@@ -6,6 +6,8 @@ import {IUniswapV2Factory} from "../../vendor/IUniswapV2Factory.sol";
 import {AStaticUSDCData, IERC20} from "../../abstract/AStaticUSDCData.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
+// @audit-question - Why inherit from AStaticUSDCData?
+// @audit-question - What happen with AStaticTokenData? It's not used, so LINK is not able to be used here, or yes?
 contract UniswapAdapter is AStaticUSDCData {
     error UniswapAdapter__TransferFailed();
 
@@ -16,7 +18,13 @@ contract UniswapAdapter is AStaticUSDCData {
 
     address[] private s_pathArray;
 
+    // @audit-issue - LOW -> IMPACT: LOW - LIKELIHOOD: HIGH
+    // @audit-issue - Parameter `wethAmount` is misleading because it represents `counterPartyToken`, which isn't always WETH.
+    // @audit-issue - RECOMMENDED MITIGATION: Include the indexed token addresses in the event and use generic names like tokenAmount and counterPartyTokenAmount for better off-chain tracking.
     event UniswapInvested(uint256 tokenAmount, uint256 wethAmount, uint256 liquidity);
+    // @audit-issue - LOW -> IMPACT: LOW - LIKELIHOOD: HIGH
+    // @audit-issue - Parameter `wethAmount` is misleading because it represents `counterPartyToken`, which isn't always WETH.
+    // @audit-issue - RECOMMENDED MITIGATION: Include the indexed token addresses in the event and use generic names like tokenAmount and counterPartyTokenAmount for better off-chain tracking.
     event UniswapDivested(uint256 tokenAmount, uint256 wethAmount);
 
     constructor(address uniswapRouter, address weth, address tokenOne) AStaticUSDCData(weth, tokenOne) {
@@ -27,6 +35,7 @@ contract UniswapAdapter is AStaticUSDCData {
     // slither-disable-start reentrancy-eth
     // slither-disable-start reentrancy-benign
     // slither-disable-start reentrancy-events
+    // @audit-info - This sentence is wrong -> "So we swap out half of the vault's underlying asset token for WETH if the asset token is USDC or WETH" It shoud be "So we swap out half of the vault's underlying asset token for WETH if the asset token is USDC".
     /**
      * @notice The vault holds only one type of asset token. However, we need to provide liquidity to Uniswap in a pair
      * @notice So we swap out half of the vault's underlying asset token for WETH if the asset token is USDC or WETH
@@ -35,7 +44,16 @@ contract UniswapAdapter is AStaticUSDCData {
      * @param token The vault's underlying asset token
      * @param amount The amount of vault's underlying asset token to use for the investment
      */
+    // @audit-question - How we track how much assets the user has invested here? Checking the LPs?
     function _uniswapInvest(IERC20 token, uint256 amount) internal {
+        // @audit-info - Missing check for zero amount
+        // @audit-answered-question - What happen if I send here another random token?
+        // @audit-answer - Not posible because the token is selected in the constructor of the vault
+        // @audit-note - The logic here is intricate but works.
+        // @audit-note - If the vault token is WETH, it pairs with USDC (i_tokenOne).
+        // @audit-note - If the vault token is USDC, it pairs with WETH.
+        // @audit-note - If the vault token is anything else (LINK), it effectively pairs with WETH because the ternary condition returns the false branch (i_weth).
+        // @audit-note - This ensures valid liquidity pairs (Token/WETH) are formed for most assets.
         IERC20 counterPartyToken = token == i_weth ? i_tokenOne : i_weth;
         // We will do half in WETH and half in the token
         uint256 amountOfTokenToSwap = amount / 2;
@@ -47,10 +65,22 @@ contract UniswapAdapter is AStaticUSDCData {
         // the element at index 1 is the address of the output token
         s_pathArray = [address(token), address(counterPartyToken)];
 
+        // @audit-issue - MEDIUM -> IMPACT: MEDIUM - LIKELIHOOD: LOW
+        // @audit-issue - Weird ERC20 could have weird returns
+        // @audit-issue - RECOMMENDED MITIGATION: Use forceApprove from safeERC20 library
         bool succ = token.approve(address(i_uniswapRouter), amountOfTokenToSwap);
         if (!succ) {
             revert UniswapAdapter__TransferFailed();
         }
+        // @audit-issue - MEDIUM -> IMPACT: HIGH - LIKELIHOOD: LOW
+        // @audit-issue - Using block.timestamp for swap deadline offers no protection
+        // @audit-issue - In the PoS model, proposers know well in advance if they will propose one or consecutive blocks ahead of time. In such a scenario, a malicious validator can hold back the transaction and execute it at a more favourable block number.
+        // @audit-issue - PoC: WethFork.t.sol::testFrontRunningWithExactDeadLine()
+        // @audit-issue - RECOMMENDED MITIGATION: Consider allowing function caller to specify swap deadline input parameter.
+        // @audit-issue - HIGH -> IMPACT: HIGH - LIKELIHOOD: MEDIUM/HIGH
+        // @audit-issue - The amount min hardcoded to 0 conduct to front running sandwich attacks
+        // @audit-issue - PoC: WethFork.t.sol::testFrontRunningWithAmountOutMinZero()
+        // @audit-issue - RECOMMENDED MITIGATION: Use a safe amountOutMin value, using the price of an oracle like Chainlink, NEVER use UniswapV2Pair price, because it can be manipulated in the same block front running your transaction
         uint256[] memory amounts = i_uniswapRouter.swapExactTokensForTokens({
             amountIn: amountOfTokenToSwap,
             amountOutMin: 0,
@@ -59,6 +89,9 @@ contract UniswapAdapter is AStaticUSDCData {
             deadline: block.timestamp
         });
 
+        // @audit-issue - MEDIUM -> IMPACT: MEDIUM - LIKELIHOOD: LOW
+        // @audit-issue - Weird ERC20 could have weird returns
+        // @audit-issue - RECOMMENDED MITIGATION: Use forceApprove from safeERC20 library
         succ = counterPartyToken.approve(address(i_uniswapRouter), amounts[1]);
         if (!succ) {
             revert UniswapAdapter__TransferFailed();
@@ -67,8 +100,17 @@ contract UniswapAdapter is AStaticUSDCData {
         if (!succ) {
             revert UniswapAdapter__TransferFailed();
         }
-
+        // @audit-info - "amounts[1] should be the WETH amount we got back" is not right, amount[1] could be token or counterparty token
         // amounts[1] should be the WETH amount we got back
+        // @audit-issue - MEDIUM -> IMPACT: HIGH - LIKELIHOOD: LOW
+        // @audit-issue - Using block.timestamp for swap deadline offers no protection
+        // @audit-issue - PoC: WethFork.t.sol::PENDING
+        // @audit-issue - In the PoS model, proposers know well in advance if they will propose one or consecutive blocks ahead of time. In such a scenario, a malicious validator can hold back the transaction and execute it at a more favourable block number.
+        // @audit-issue - RECOMMENDED MITIGATION: Consider allowing function caller to specify swap deadline input parameter.
+        // @audit-issue - HIGH -> IMPACT: HIGH - LIKELIHOOD: MEDIUM/HIGH
+        // @audit-issue - The amount amountAMin and amountBMin hardcoded to 0 conduct to front running sandwich attacks reciving less LP tokens than expected
+        // @audit-issue - PoC: WethFork.t.sol::PENDING
+        // @audit-issue - RECOMMENDED MITIGATION: 
         (uint256 tokenAmount, uint256 counterPartyTokenAmount, uint256 liquidity) = i_uniswapRouter.addLiquidity({
             tokenA: address(token),
             tokenB: address(counterPartyToken),
@@ -79,6 +121,9 @@ contract UniswapAdapter is AStaticUSDCData {
             to: address(this),
             deadline: block.timestamp
         });
+        // @audit-issue - LOW -> IMPACT: LOW - LIKELIHOOD: HIGH
+        // @audit-issue - Reentrancy vulnerability, The event should be placed before the external calls
+        // @audit-issue - RECOMMENDED MITIGATION: Move the event emission before the external calls
         emit UniswapInvested(tokenAmount, counterPartyTokenAmount, liquidity);
     }
 
@@ -89,8 +134,19 @@ contract UniswapAdapter is AStaticUSDCData {
      * @param liquidityAmount The amount of LP tokens to burn
      */
     function _uniswapDivest(IERC20 token, uint256 liquidityAmount) internal returns (uint256 amountOfAssetReturned) {
+        // @audit-info - Missing check for zero amount
+        // @audit-question - What happen if I send here another random token?
+        // @audit-info - Missing check for valid token
         IERC20 counterPartyToken = token == i_weth ? i_tokenOne : i_weth;
 
+        // @audit-issue - MEDIUM -> IMPACT: HIGH - LIKELIHOOD: LOW
+        // @audit-issue - Using block.timestamp for swap deadline offers no protection
+        // @audit-issue - In the PoS model, proposers know well in advance if they will propose one or consecutive blocks ahead of time. In such a scenario, a malicious validator can hold back the transaction and execute it at a more favourable block number.
+        // @audit-issue - RECOMMENDED MITIGATION: Consider allowing function caller to specify swap deadline input parameter.
+        // @audit-issue - HIGH -> IMPACT: HIGH - LIKELIHOOD: MEDIUM/HIGH
+        // @audit-issue - The amount amountAMin and amountBMin hardcoded to 0 conduct to front running sandwich attacks reciving less LP tokens than expected
+        // @audit-issue - PoC: WethFork.t.sol::PENDING
+        // @audit-issue - RECOMMENDED MITIGATION: 
         (uint256 tokenAmount, uint256 counterPartyTokenAmount) = i_uniswapRouter.removeLiquidity({
             tokenA: address(token),
             tokenB: address(counterPartyToken),
@@ -101,6 +157,14 @@ contract UniswapAdapter is AStaticUSDCData {
             deadline: block.timestamp
         });
         s_pathArray = [address(counterPartyToken), address(token)];
+        // @audit-issue - MEDIUM -> IMPACT: HIGH - LIKELIHOOD: LOW
+        // @audit-issue - Using block.timestamp for swap deadline offers no protection
+        // @audit-issue - In the PoS model, proposers know well in advance if they will propose one or consecutive blocks ahead of time. In such a scenario, a malicious validator can hold back the transaction and execute it at a more favourable block number.
+        // @audit-issue - RECOMMENDED MITIGATION: Consider allowing function caller to specify swap deadline input parameter.
+        // @audit-issue - HIGH -> IMPACT: HIGH - LIKELIHOOD: MEDIUM/HIGH
+        // @audit-issue - The amount min hardcoded to 0 conduct to front running sandwich attacks
+        // @audit-issue - PoC: WethFork.t.sol::testFrontRunningWithAmountOutMinZero()
+        // @audit-issue - RECOMMENDED MITIGATION: Use a safe amountOutMin value, using the price of an oracle like Chainlink, NEVER use UniswapV2Pair price, because it can be manipulated in the same block front running your transaction
         uint256[] memory amounts = i_uniswapRouter.swapExactTokensForTokens({
             amountIn: counterPartyTokenAmount,
             amountOutMin: 0,
@@ -108,7 +172,13 @@ contract UniswapAdapter is AStaticUSDCData {
             to: address(this),
             deadline: block.timestamp
         });
+        // @audit-issue - LOW -> IMPACT: LOW - LIKELIHOOD: HIGH
+        // @audit-issue - Reentrancy vulnerability, The event should be placed before the external calls
+        // @audit-issue - RECOMMENDED MITIGATION: Move the event emission before the external calls
         emit UniswapDivested(tokenAmount, amounts[1]);
+        // @audit-issue - MEDIUM -> IMPACT: MEDIUM/LOW - LIKELIHOOD: HIGH
+        // @audit-issue - amountOfAssetReturned is wrong, it should be the sum of the tokens returned by the LP and the token returned by the swap
+        // @audit-issue - RECOMMENDED MITIGATION: amountOfAssetReturned = tokenAmount + amounts[1];
         amountOfAssetReturned = amounts[1];
     }
     // slither-disable-end reentrancy-benign

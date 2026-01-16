@@ -8,6 +8,7 @@ import {UniswapAdapter} from "./investableUniverseAdapters/UniswapAdapter.sol";
 import {DataTypes} from "../vendor/DataTypes.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
+// @audit-question - Is ReentrancyGuard well positioned at the far right of inheritance?
 contract VaultShares is ERC4626, IVaultShares, AaveAdapter, UniswapAdapter, ReentrancyGuard {
     error VaultShares__DepositMoreThanMax(uint256 amount, uint256 max);
     error VaultShares__NotGuardian();
@@ -20,13 +21,17 @@ contract VaultShares is ERC4626, IVaultShares, AaveAdapter, UniswapAdapter, Reen
     //////////////////////////////////////////////////////////////*/
     IERC20 internal immutable i_uniswapLiquidityToken;
     IERC20 internal immutable i_aaveAToken;
+    // @audit-note - i_guardian is the guardian of the vault
     address private immutable i_guardian;
+    // @audit-note - i_vaultGuardians is the contract that manages the guardians
     address private immutable i_vaultGuardians;
+    // @audit-note - i_guardianAndDaoCut is the percentage of the cut that goes to the guardian and the DAO
     uint256 private immutable i_guardianAndDaoCut;
+    // @audit-note - s_isActive is a boolean that indicates if the vault is active
     bool private s_isActive;
 
     AllocationData private s_allocationData;
-
+    
     uint256 private constant ALLOCATION_PRECISION = 1_000;
 
     /*//////////////////////////////////////////////////////////////
@@ -40,6 +45,7 @@ contract VaultShares is ERC4626, IVaultShares, AaveAdapter, UniswapAdapter, Reen
                                MODIFIERS
     //////////////////////////////////////////////////////////////*/
 
+    // @audit-info - GAS - Consider wrap modifiers logic inside internal functions to reduce code size
     modifier onlyGuardian() {
         if (msg.sender != i_guardian) {
             revert VaultShares__NotGuardian();
@@ -47,6 +53,7 @@ contract VaultShares is ERC4626, IVaultShares, AaveAdapter, UniswapAdapter, Reen
         _;
     }
 
+    // @audit-info - GAS - Consider wrap modifiers logic inside internal functions to reduce code size
     modifier onlyVaultGuardians() {
         if (msg.sender != i_vaultGuardians) {
             revert VaultShares__NotVaultGuardianContract();
@@ -54,6 +61,7 @@ contract VaultShares is ERC4626, IVaultShares, AaveAdapter, UniswapAdapter, Reen
         _;
     }
 
+    // @audit-info - GAS - Consider wrap modifiers logic inside internal functions to reduce code size
     modifier isActive() {
         if (!s_isActive) {
             revert VaultShares__NotActive();
@@ -65,15 +73,29 @@ contract VaultShares is ERC4626, IVaultShares, AaveAdapter, UniswapAdapter, Reen
     /**
      * @notice removes all supplied liquidity from Uniswap and supplied lending amount from Aave and then re-invests it back into them only if the vault is active
      */
+     // @audit-info - Modifiers should be used to data validation, access control and other non-business logic. Use them as business logic is a bad practice than can conduct to reentrancy attacks and other unexpected behavior.
+     // @audit-info - RECOMMENDED MITIGATION: Uses independent internal functions for divest and invest actions.
+     // @audit-answered-question - Could this modifier have a reentrancy issue?
+     // @audit-answer - Yes, because it depends on the order of modifiers in the function.
+     // @audit-issue - MEDIUM -> IMPACT: LOW/MEDIUM - LIKELIHOOD: HIGH
+     // @audit-issue - This design is inefficient. Divesting and investing everything on every deposit/withdraw/redeem is expensive in gas terms and could lead to sandwich attacks if the vault manages a large amount of funds.
+     // @audit-issue - In addition, integration with other protocols will fail because totalAssets() will return only the assets held in the vault, not the total amount including invested funds.
+     // @audit-issue - RECOMMENDED MITIGATION: Implement active accounting for totalAssets and partial divest/invest actions.
     modifier divestThenInvest() {
         uint256 uniswapLiquidityTokensBalance = i_uniswapLiquidityToken.balanceOf(address(this));
         uint256 aaveAtokensBalance = i_aaveAToken.balanceOf(address(this));
 
         // Divest
         if (uniswapLiquidityTokensBalance > 0) {
+        // @audit-answered-question - Is necessary this returned value?
+        // @audit-answer - No, not for bussiness logic but yes for an event
+        // @audit-info - Missing return value, that could be used for an event
             _uniswapDivest(IERC20(asset()), uniswapLiquidityTokensBalance);
         }
         if (aaveAtokensBalance > 0) {
+        // @audit-answered-question - Is necessary this returned value?
+        // @audit-answer - No, not for bussiness logic but yes for an event
+        // @audit-info - Missing return value, that could be used for an event
             _aaveDivest(IERC20(asset()), aaveAtokensBalance);
         }
 
@@ -81,8 +103,10 @@ contract VaultShares is ERC4626, IVaultShares, AaveAdapter, UniswapAdapter, Reen
 
         // Reinvest
         if (s_isActive) {
+            // @audit-note - This function invests all underlying token that the contract has
             _investFunds(IERC20(asset()).balanceOf(address(this)));
         }
+        // @audit-info - Missing event for this divestThenInvest action
     }
     // slither-disable-end reentrancy-eth
 
@@ -90,6 +114,19 @@ contract VaultShares is ERC4626, IVaultShares, AaveAdapter, UniswapAdapter, Reen
                                FUNCTIONS
     //////////////////////////////////////////////////////////////*/
     // We use a struct to avoid stack too deep errors. Thanks Solidity
+    // @audit-info - Missing constructor NatSpec documentation
+    // @audit-note - Asset is the underlying token of the vault
+    // @audit-note - Vault name is the name of the vault
+    // @audit-note - Vault symbol is the symbol of the vault
+    // @audit-note - Aave pool is the Aave pool of the vault
+    // @audit-note - Uniswap router is the Uniswap router of the vault
+    // @audit-note - WETH is the WETH token of the vault
+    // @audit-note - USDC is the USDC token of the vault
+    // @audit-note - Guardian is the guardian of the vault
+    // @audit-note - Guardian and DAO cut is the percentage of the cut that goes to the guardian and the DAO
+    // @audit-note - Vault guardians is the contract that manages the guardians
+    // @audit-question - What tokens can be used as underlying token?
+    // @audit-question - Is is protected in any way?
     constructor(ConstructorData memory constructorData)
         ERC4626(constructorData.asset)
         ERC20(constructorData.vaultName, constructorData.vaultSymbol)
@@ -103,6 +140,7 @@ contract VaultShares is ERC4626, IVaultShares, AaveAdapter, UniswapAdapter, Reen
         updateHoldingAllocation(constructorData.allocationData);
 
         // External calls
+        // @audit-note - Get aToken and LP addresses for this underlying token from Aave and Uniswap
         i_aaveAToken =
             IERC20(IPool(constructorData.aavePool).getReserveData(address(constructorData.asset)).aTokenAddress);
         i_uniswapLiquidityToken = IERC20(i_uniswapFactory.getPair(address(constructorData.asset), address(i_weth)));
@@ -112,6 +150,7 @@ contract VaultShares is ERC4626, IVaultShares, AaveAdapter, UniswapAdapter, Reen
      * @notice Sets the vault as not active, which means that the vault guardian has quit
      * @notice Users will not be able to invest in this vault, however, they will be able to withdraw their deposited assets
      */
+    // @audit-info - GAS - This function could me marked as external
     function setNotActive() public onlyVaultGuardians isActive {
         s_isActive = false;
         emit NoLongerActive();
@@ -129,6 +168,9 @@ contract VaultShares is ERC4626, IVaultShares, AaveAdapter, UniswapAdapter, Reen
         }
         s_allocationData = tokenAllocationData;
         emit UpdatedAllocation(tokenAllocationData);
+        // @audit-issue - MEDIUM -> IMPACT: LOW/MEDIUM - LIKELIHOOD: HIGH
+        // @audit-issue - Updating allocation data without rebalancing creates a discrepancy between the intended strategy and the actual location of funds.
+        // @audit-issue - RECOMMENDED MITIGATION: Call rebalanceFunds() automatically (or based in a boolean parameter) or clearly document that rebalancing is "lazy" and must be triggered manually/by user interaction.
     }
 
     /**
@@ -137,6 +179,8 @@ contract VaultShares is ERC4626, IVaultShares, AaveAdapter, UniswapAdapter, Reen
      * @notice Mints shares to the DAO and the guardian as a fee
      */
     // slither-disable-start reentrancy-eth
+    // @audit-info - The nonReentrant modifier should occur before all other modifiers, This is a best-practice to protect against reentrancy in other modifiers.
+    // @audit-info - GAS - This function could me marked as external
     function deposit(uint256 assets, address receiver)
         public
         override(ERC4626, IERC4626)
@@ -149,10 +193,18 @@ contract VaultShares is ERC4626, IVaultShares, AaveAdapter, UniswapAdapter, Reen
         }
 
         uint256 shares = previewDeposit(assets);
+        // @audit-info - There is no a reentrancy issue here because it is using the nonReentrant modifier, but it's always recommended to execute the effects (mints) before the external calls (trasferFrom inside _deposit()).
         _deposit(_msgSender(), receiver, assets, shares);
 
+        // @audit-issue - HIGH - IMPACT: MEDIUM - LIKELIHOOD: HIGH
+        // @audit-issue - The minting of shares to the guardian and the DAO are inflating the total supply of the vault, they should be deducted from the shares to be minted to avoid dilution. After a user deposit of 100 assets, the vault will mint 100% of previewed shares to the user, but it will also mint (shares / i_guardianAndDaoCut) to the guardian and (shares / i_guardianAndDaoCut) to the DAO.
+        // @audit-issue - PoC: PENDING
+        // @audit-issue - RECOMMENDED MITIGATION: Deducting the guardian's and the DAO's shares from the total shares to be minted.
         _mint(i_guardian, shares / i_guardianAndDaoCut);
         _mint(i_vaultGuardians, shares / i_guardianAndDaoCut);
+
+        // @audit-issue - LOW -> IMPACT: LOW - LIKELIHOOD: HIGH
+        // @audit-issue - Missing deposit event
 
         _investFunds(assets);
         return shares;
@@ -178,6 +230,10 @@ contract VaultShares is ERC4626, IVaultShares, AaveAdapter, UniswapAdapter, Reen
      * @notice Anyone can call this and pay the gas costs to rebalance the portfolio at any time. 
      * @dev We understand that this is horrible for gas costs. 
      */
+     // @audit-issue - LOW - IMPACT: MEDIUM/LOW - LIKELIHOOD: LOW
+     // @audit-issue - The `nonReentrant` `modifier` should occur before all other modifiers, This is a best-practice to protect against reentrancy in other modifiers.
+     // @audit-info - Empty blocks is a bad practice
+     // @audit-info - GAS - This function could me marked as external
     function rebalanceFunds() public isActive divestThenInvest nonReentrant {}
 
     /**
@@ -186,6 +242,9 @@ contract VaultShares is ERC4626, IVaultShares, AaveAdapter, UniswapAdapter, Reen
      * We first divest our assets so we get a good idea of how many assets we hold.
      * Then, we redeem for the user, and automatically reinvest.
      */
+     // @audit-issue - LOW - IMPACT: MEDIUM/LOW - LIKELIHOOD: LOW
+     // @audit-issue - The `nonReentrant` `modifier` should occur before all other modifiers, This is a best-practice to protect against reentrancy in other modifiers.
+     // @audit-info - GAS - This function could me marked as external
     function withdraw(uint256 assets, address receiver, address owner)
         public
         override(IERC4626, ERC4626)
@@ -203,6 +262,9 @@ contract VaultShares is ERC4626, IVaultShares, AaveAdapter, UniswapAdapter, Reen
      * We first divest our assets so we get a good idea of how many assets we hold.
      * Then, we redeem for the user, and automatically reinvest.
      */
+     // @audit-issue - LOW - IMPACT: MEDIUM/LOW - LIKELIHOOD: LOW
+     // @audit-issue - The `nonReentrant` `modifier` should occur before all other modifiers, This is a best-practice to protect against reentrancy in other modifiers.
+     // @audit-info - GAS - This function could me marked as external
     function redeem(uint256 shares, address receiver, address owner)
         public
         override(IERC4626, ERC4626)
@@ -257,6 +319,10 @@ contract VaultShares is ERC4626, IVaultShares, AaveAdapter, UniswapAdapter, Reen
     /**
      * @return Uniswap's LP token
      */
+    /**
+     * @return Uniswap's LP token
+     */
+    // @audit-info - Typo in function name: getUniswapLiquidtyToken -> getUniswapLiquidityToken
     function getUniswapLiquidtyToken() external view returns (address) {
         return address(i_uniswapLiquidityToken);
     }

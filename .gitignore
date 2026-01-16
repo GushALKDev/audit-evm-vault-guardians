@@ -16,3 +16,12 @@ docs/
 broadcast
 
 .DS_Store
+
+# Audit info
+aderyn-report.md
+slither.config.json
+report.md
+findings-example.md
+logo.*
+coverage.txt
+report-layout.md

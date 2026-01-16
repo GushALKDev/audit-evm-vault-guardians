@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.20;
 
-import {Test} from "forge-std/Test.sol";
+import {Test, console2} from "forge-std/Test.sol";
 import {VaultGuardians} from "../src/protocol/VaultGuardians.sol";
 import {VaultGuardianToken} from "../src/dao/VaultGuardianToken.sol";
 import {VaultGuardianGovernor} from "../src/dao/VaultGuardianGovernor.sol";

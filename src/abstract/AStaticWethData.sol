@@ -5,6 +5,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 abstract contract AStaticWethData {
     // The following four tokens are the approved tokens the protocol accepts
+    // @audit-question - Why this is talking about four tokens?
     // The default values are for Mainnet
     IERC20 internal immutable i_weth;
     // slither-disable-next-line unused-state

@@ -25,7 +25,11 @@ contract VaultGuardiansBaseTest is Base_Test {
     uint256 mintAmount = 100 ether;
 
     // 500 hold, 250 uniswap, 250 aave
+    // @audit-info - Consider initialice structs with named fields
+    // @audit-info - `AllocationData({ holdAllocation: 500, uniswapAllocation: 250, aaveAllocation: 250 })`
     AllocationData allocationData = AllocationData(500, 250, 250);
+    // @audit-info - Consider initialice structs with named fields
+    // @audit-info - `AllocationData({ holdAllocation: 500, uniswapAllocation: 250, aaveAllocation: 250 })`
     AllocationData newAllocationData = AllocationData(0, 500, 500);
 
     /*//////////////////////////////////////////////////////////////

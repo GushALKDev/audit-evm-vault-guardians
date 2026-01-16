@@ -3,6 +3,7 @@ pragma solidity 0.8.20;
 
 import {DataTypes} from "./DataTypes.sol";
 
+// @audit-note - Aave V3 IPool interface
 // A subset of the AaveV3 Pool interface
 // https://github.com/aave/aave-v3-core/blob/master/contracts/interfaces/IPool.sol
 interface IPool {

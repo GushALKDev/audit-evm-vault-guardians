@@ -5,6 +5,8 @@ import {IPool} from "../../vendor/IPool.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
+// @audit-question - Why AStaticTokenData is not inherited here and it is in UniswapAdapter?
+// @audit-question - It does mean that any token is accepted? Is it an issue?
 contract AaveAdapter {
     using SafeERC20 for IERC20;
 
@@ -22,6 +24,9 @@ contract AaveAdapter {
      * @param amount The amount of vault's underlying asset token to invest
      */
     function _aaveInvest(IERC20 asset, uint256 amount) internal {
+        // @audit-issue - MEDIUM -> IMPACT: MEDIUM - LIKELIHOOD: LOW
+        // @audit-issue - Weird ERC20 could have weird returns
+        // @audit-issue - RECOMMENDED MITIGATION: Use forceApprove from safeERC20 library
         bool succ = asset.approve(address(i_aavePool), amount);
         if (!succ) {
             revert AaveAdapter__TransferFailed();
@@ -32,6 +37,9 @@ contract AaveAdapter {
             onBehalfOf: address(this), // decides who get's Aave's aTokens for the investment. In this case, mint it to the vault
             referralCode: 0
         });
+        // @audit-issue - LOW -> IMPACT: LOW - LIKELIHOOD: HIGH
+        // @audit-issue - Missing event
+
     }
 
     /**
@@ -40,10 +48,15 @@ contract AaveAdapter {
      * @param amount The amount of vault's underlying asset token to withdraw
      */
     function _aaveDivest(IERC20 token, uint256 amount) internal returns (uint256 amountOfAssetReturned) {
+        // @audit-question - Is necessary this returned value?
         i_aavePool.withdraw({
             asset: address(token),
             amount: amount,
+            // @audit-question - This is not the vault, it's the adapter, should not put the vault address (msg.sender) on to?
             to: address(this)
         });
+        // @audit-question - There is a missing return value here, is it necessary?
+        // @audit-issue - LOW -> IMPACT: LOW - LIKELIHOOD: HIGH
+        // @audit-issue - Missing event
     }
 }

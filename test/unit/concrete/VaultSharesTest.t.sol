@@ -13,6 +13,8 @@ contract VaultSharesTest is Base_Test {
     uint256 mintAmount = 100 ether;
     address guardian = makeAddr("guardian");
     address user = makeAddr("user");
+    // @audit-info - Consider initialice structs with named fields
+    // @audit-info - `AllocationData({ holdAllocation: 500, uniswapAllocation: 250, aaveAllocation: 250 })`
     AllocationData allocationData = AllocationData(
         500, // hold
         250, // uniswap
@@ -21,6 +23,8 @@ contract VaultSharesTest is Base_Test {
     VaultShares public wethVaultShares;
     uint256 public defaultGuardianAndDaoCut = 1000;
 
+    // @audit-info - Consider initialice structs with named fields
+    // @audit-info - `AllocationData({ holdAllocation: 500, uniswapAllocation: 250, aaveAllocation: 250 })`
     AllocationData newAllocationData = AllocationData(
         0, // hold
         500, // uniswap
@@ -95,6 +99,8 @@ contract VaultSharesTest is Base_Test {
     }
 
     function testMustUpdateAllocationDataWithCorrectPrecision() public hasGuardian {
+        // @audit-info - Consider initialice structs with named fields
+        // @audit-info - `AllocationData({ holdAllocation: 500, uniswapAllocation: 250, aaveAllocation: 250 })` 
         AllocationData memory badAllocationData = AllocationData(0, 200, 500);
         uint256 totalBadAllocationData =
             badAllocationData.holdAllocation + badAllocationData.aaveAllocation + badAllocationData.uniswapAllocation;

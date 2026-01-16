@@ -12,10 +12,16 @@ contract AavePoolMock is IPool {
     }
 
     function supply(address asset, uint256 amount, address, /* onBehalfOf */ uint16 /* referralCode */ ) external {
+        // @audit-issue - MEDIUM -> IMPACT: HIGH -> LIKELIHOOD: LOW
+        // @audit-issue - We should check the return value of transferFrom to revert if it fails
+        // @audit-issue - if weirdERC20 tokens could be used, we should use safeTransferFrom.
         IERC20(asset).transferFrom(msg.sender, address(this), amount);
     }
 
     function withdraw(address asset, uint256 amount, address to) external returns (uint256) {
+        // @audit-issue - MEDIUM -> IMPACT: HIGH -> LIKELIHOOD: LOW
+        // @audit-issue - We should check the return value of transfer to revert if it fails
+        // @audit-issue - if weirdERC20 tokens could be used, we should use safeTransfer.
         IERC20(asset).transfer(to, amount);
         return amount;
     }

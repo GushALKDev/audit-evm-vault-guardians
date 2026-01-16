@@ -59,6 +59,7 @@ contract UniswapRouterMock is IUniswapV2Router01, ERC20Mock {
         uint256 amountInMax,
         address[] calldata path,
         address to,
+        // @audit-info - deadline is missing in Mock
         uint256
     ) external returns (uint256[] memory amounts) {
         ERC20Mock(path[0]).transferFrom(msg.sender, address(this), amountInMax);
@@ -73,6 +74,7 @@ contract UniswapRouterMock is IUniswapV2Router01, ERC20Mock {
         uint256 amountOutMin,
         address[] calldata path,
         address to,
+        // @audit-info - deadline is missing in Mock
         uint256
     ) external returns (uint256[] memory amounts) {
         ERC20Mock(path[0]).transferFrom(msg.sender, address(this), amountIn);

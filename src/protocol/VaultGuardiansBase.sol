@@ -40,17 +40,22 @@ import {VaultGuardianToken} from "../dao/VaultGuardianToken.sol";
  * @notice it includes all the functionality of a user or guardian interacting with the protocol
  */
 
+
 contract VaultGuardiansBase is AStaticTokenData, IVaultData {
     using SafeERC20 for IERC20;
 
+    // @audit-info - Unused custom error.
     error VaultGuardiansBase__NotEnoughWeth(uint256 amount, uint256 amountNeeded);
     error VaultGuardiansBase__NotAGuardian(address guardianAddress, IERC20 token);
+    // @audit-info - Unused custom error.
     error VaultGuardiansBase__CantQuitGuardianWithNonWethVaults(address guardianAddress);
     error VaultGuardiansBase__CantQuitWethWithThisFunction();
     error VaultGuardiansBase__TransferFailed();
+    // @audit-info - Unused custom error.
     error VaultGuardiansBase__FeeTooSmall(uint256 fee, uint256 requiredFee);
     error VaultGuardiansBase__NotApprovedToken(address token);
 
+    // @audit-info - Section without any content
     /*//////////////////////////////////////////////////////////////
                            TYPE DECLARATIONS
     //////////////////////////////////////////////////////////////*/
@@ -60,25 +65,43 @@ contract VaultGuardiansBase is AStaticTokenData, IVaultData {
     //////////////////////////////////////////////////////////////*/
     address private immutable i_aavePool;
     address private immutable i_uniswapV2Router;
+    // @audit-question - Is this the Governance token?
     VaultGuardianToken private immutable i_vgToken;
 
+    // @audit-question - Is this fee paid or received by the guardian?
+    // @audit-note // Fee paid by the guardian in ETH
     uint256 private constant GUARDIAN_FEE = 0.1 ether;
 
     // DAO updatable values
+    // @audit-note // Amount staked by the guardian in Tokens
+    // @audit-issue - HIGH -> IMPACT: HIGH -> LIKELIHOOD: HIGH
+    // @audit-issue - 10 ether == 10e18, it's 10 tokens for an 18 decimals token, but it's 10e12 for a 6 decimals tokens like USDC 
+    // @audit-issue - or 10e10 tokens for WBTC, this make no posible to create the vault for those tokens.
+    // @audit-issue - In adition, the difference in value between tokens with 18 decimales I.E LINK and WETH make no sense.
+    // @audit-issue - This value should be token dependant.
     uint256 internal s_guardianStakePrice = 10 ether;
+    // @audit-question - Should this value be the same here and in the VaultShares?
     uint256 internal s_guardianAndDaoCut = 1000;
 
     // The guardian's address mapped to the asset, mapped to the allocation data
+    // @audit-question - IVaultShares ConstructorData has usdc and weth hardcoded, what about LINK?
     mapping(address guardianAddress => mapping(IERC20 asset => IVaultShares vaultShares)) private s_guardians;
     mapping(address token => bool approved) private s_isApprovedToken;
 
     /*//////////////////////////////////////////////////////////////
                                  EVENTS
     //////////////////////////////////////////////////////////////*/
+    // @audit-info - Missing indexed parameter
     event GuardianAdded(address guardianAddress, IERC20 token);
+    // @audit-info - Missing indexed parameter
+    // @audit-info - Typo in event name: GaurdianRemoved -> GuardianRemoved
     event GaurdianRemoved(address guardianAddress, IERC20 token);
+    // @audit-info - Missing indexed parameter
     event InvestedInGuardian(address guardianAddress, IERC20 token, uint256 amount);
+    // @audit-info - Missing indexed parameter
+    // @audit-info - Typo in event name: DinvestedFromGuardian -> DivestedFromGuardian
     event DinvestedFromGuardian(address guardianAddress, IERC20 token, uint256 amount);
+    // @audit-info - Missing indexed parameter
     event GuardianUpdatedHoldingAllocation(address guardianAddress, IERC20 token);
 
     /*//////////////////////////////////////////////////////////////
@@ -120,6 +143,11 @@ contract VaultGuardiansBase is AStaticTokenData, IVaultData {
      * 
      * @param wethAllocationData the allocation data for the WETH vault
      */
+    // @audit-note Vault Factory
+    // @audit-answered-question - asset is always WETH?
+    // @audit-answer - Yes, the vault is created for WETH, there are other function below for other tokens
+    // @audit-answered-question - vaultName and vaultSymbol are hardcoded
+    // @audit-answer - Yes, it's right, there are other function below for other tokens
     function becomeGuardian(AllocationData memory wethAllocationData) external returns (address) {
         VaultShares wethVault =
         new VaultShares(IVaultShares.ConstructorData({
@@ -136,6 +164,8 @@ contract VaultGuardiansBase is AStaticTokenData, IVaultData {
             usdc: address(i_tokenOne)
         }));
         return _becomeTokenGuardian(i_weth, wethVault);
+        // @audit-issue - LOW -> IMPACT: LOW - LIKELIHOOD: MEDIUM
+        // @audit-issue - Missing event emit
     }
 
     /**
@@ -144,6 +174,7 @@ contract VaultGuardiansBase is AStaticTokenData, IVaultData {
      * @param allocationData A struct indicating the ratio of asset tokens to hold, invest in Aave and Uniswap (based on Vault Guardian strategy)
      * @param token The token to become a Vault Guardian for
      */
+     // @audit-question - The stake should be refunded to the guardian if he close the vault?
     function becomeTokenGuardian(AllocationData memory allocationData, IERC20 token)
         external
         onlyGuardian(i_weth)
@@ -151,6 +182,8 @@ contract VaultGuardiansBase is AStaticTokenData, IVaultData {
     {
         //slither-disable-next-line uninitialized-local
         VaultShares tokenVault;
+        // @audit-note tokenOne -> USDC
+        // @audit-info It's not a good practice to write the full object twice, we can use the same object with different values where necessary, what if we want 50 different tokens?
         if (address(token) == address(i_tokenOne)) {
             tokenVault =
             new VaultShares(IVaultShares.ConstructorData({
@@ -166,6 +199,9 @@ contract VaultGuardiansBase is AStaticTokenData, IVaultData {
                 weth: address(i_weth),
                 usdc: address(i_tokenOne)
             }));
+        // @audit-note tokenTwo -> LINK
+        // @audit-issue - MEDIUM -> IMPACT: LOW - LIKELIHOOD: HIGH
+        // @audit-issue - The vault name and symbol are wrong, it's using the USDC ones
         } else if (address(token) == address(i_tokenTwo)) {
             tokenVault =
             new VaultShares(IVaultShares.ConstructorData({
@@ -184,6 +220,8 @@ contract VaultGuardiansBase is AStaticTokenData, IVaultData {
         } else {
             revert VaultGuardiansBase__NotApprovedToken(address(token));
         }
+        // @audit-issue - LOW -> IMPACT: LOW - LIKELIHOOD: MEDIUM
+        // @audit-issue - Missing event emit
         return _becomeTokenGuardian(token, tokenVault);
     }
 
@@ -196,6 +234,8 @@ contract VaultGuardiansBase is AStaticTokenData, IVaultData {
      */
     function quitGuardian() external onlyGuardian(i_weth) returns (uint256) {
         if (_guardianHasNonWethVaults(msg.sender)) {
+            // @audit-issue - LOW -> IMPACT: LOW - LIKELIHOOD: MEDIUM
+            // @audit-issue - The custom error is wrong, it should be VaultGuardiansBase__CantQuitGuardianWithNonWethVaults()
             revert VaultGuardiansBase__CantQuitWethWithThisFunction();
         }
         return _quitGuardian(i_weth);
@@ -225,10 +265,12 @@ contract VaultGuardiansBase is AStaticTokenData, IVaultData {
         s_guardians[msg.sender][token].updateHoldingAllocation(tokenAllocationData);
     }
 
+    // @audit-info - Section without any content
     /*//////////////////////////////////////////////////////////////
                             PUBLIC FUNCTIONS
     //////////////////////////////////////////////////////////////*/
 
+    // @audit-info - Section without any content
     /*//////////////////////////////////////////////////////////////
                            INTERNAL FUNCTIONS
     //////////////////////////////////////////////////////////////*/
@@ -237,7 +279,13 @@ contract VaultGuardiansBase is AStaticTokenData, IVaultData {
                            PRIVATE FUNCTIONS
     //////////////////////////////////////////////////////////////*/
     function _quitGuardian(IERC20 token) private returns (uint256) {
+        // @audit-info - Double casting to IVaultShares, the mapping already returns an IVaultShares object
         IVaultShares tokenVault = IVaultShares(s_guardians[msg.sender][token]);
+        // @audit-issue - HIGH -> IMPACT: HIGH - LIKELIHOOD: HIGH
+        // @audit-issue - Setting the mapping to 0 breaks the connection to the vault.
+        // @audit-issue - Users rely on this mapping to find the vault address to withdraw their funds.
+        // @audit-issue - If we delete it, the vault becomes orphaned and users won't know where to properly withdraw, contradicting the docs.
+        // @audit-issue - RECOMMENDED MITIGATION: Only set the vault as Not active, but do not reset the mapping to address(0).
         s_guardians[msg.sender][token] = IVaultShares(address(0));
         emit GaurdianRemoved(msg.sender, token);
         tokenVault.setNotActive();
@@ -265,16 +313,32 @@ contract VaultGuardiansBase is AStaticTokenData, IVaultData {
      * @param token the token that the guardian will be guarding
      * @param tokenVault the vault that the guardian will be guarding
      */
+    // @audit-issue - HIGH -> IMPACT: HIGH - LIKELIHOOD: HIGH
+    // @audit-issue - The GUARDIAN_FEE in ETH is not received by the contract at any point
+    // @audit-issue - RECOMMENDED MITIGATION: Mark the function as payable, transfer the ETH to the contract and check if the amount is correct.
+    // @audit-question - What happens if someone calls in a loop to this function with the same token/vault?
     function _becomeTokenGuardian(IERC20 token, VaultShares tokenVault) private returns (address) {
+        // @audit-info - Missing address zero check
+        // @audit-issue - HIGH -> IMPACT: HIGH - LIKELIHOOD: MEDIUM
+        // @audit-issue - Missing check to see if the guardian is already guarding this token, in affirmative case the vault will be replaced and the funds will be locked.
+        // @audit-issue - RECOMMENDED MITIGATION: Check if the guardian is already guarding this token
         s_guardians[msg.sender][token] = IVaultShares(address(tokenVault));
         emit GuardianAdded(msg.sender, token);
         i_vgToken.mint(msg.sender, s_guardianStakePrice);
+        // @audit-note - The Guardian send the deposit tokens to this contract
         token.safeTransferFrom(msg.sender, address(this), s_guardianStakePrice);
+        // @audit-issue - MEDIUM -> IMPACT: MEDIUM - LIKELIHOOD: LOW
+        // @audit-issue - Weird ERC20 could have weird returns
+        // @audit-issue - RECOMMENDED MITIGATION: Use forceApprove from safeERC20 library
+        // @audit-note - The deposit tokens are approved and deposite into the vault
         bool succ = token.approve(address(tokenVault), s_guardianStakePrice);
         if (!succ) {
             revert VaultGuardiansBase__TransferFailed();
         }
         uint256 shares = tokenVault.deposit(s_guardianStakePrice, msg.sender);
+        // @audit-info - The shares must be always equal to the deposit amount, so it's better to use
+        // @audit-info - `if (shares != s_guardianStakePrice) revert VaultGuardiansBase__TransferFailed();`
+        // @audit-info - In this way we are sure that it's the first deposit and there is no an ERC4626 inflation attack.
         if (shares == 0) {
             revert VaultGuardiansBase__TransferFailed();
         }
@@ -282,6 +346,7 @@ contract VaultGuardiansBase is AStaticTokenData, IVaultData {
     }
     // slither-disable-end reentrancy-eth
 
+    // @audit-info - Section without any content
     /*//////////////////////////////////////////////////////////////
                    INTERNAL AND PRIVATE VIEW AND PURE
     //////////////////////////////////////////////////////////////*/

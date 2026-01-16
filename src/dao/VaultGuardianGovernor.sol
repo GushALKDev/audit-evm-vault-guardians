@@ -13,17 +13,19 @@ contract VaultGuardianGovernor is Governor, GovernorCountingSimple, GovernorVote
         GovernorVotes(_voteToken)
         GovernorVotesQuorumFraction(4)
     {}
-
+    // @audit-info - GAS - This function could me marked as external
     function votingDelay() public pure override returns (uint256) {
         return 1 days;
     }
 
+    // @audit-info - GAS - This function could me marked as external
     function votingPeriod() public pure override returns (uint256) {
         return 7 days;
     }
 
     // The following functions are overrides required by Solidity.
 
+    // @audit-info - GAS - This function could me marked as external
     function quorum(uint256 blockNumber)
         public
         view
