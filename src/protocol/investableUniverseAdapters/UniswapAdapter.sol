@@ -6,8 +6,10 @@ import {IUniswapV2Factory} from "../../vendor/IUniswapV2Factory.sol";
 import {AStaticUSDCData, IERC20} from "../../abstract/AStaticUSDCData.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-// @audit-question - Why inherit from AStaticUSDCData?
-// @audit-question - What happen with AStaticTokenData? It's not used, so LINK is not able to be used here, or yes?
+// @audit-answered-question - Why inherit from AStaticUSDCData?
+// @audit-answer - To access static helper addresses (WETH, USDC/TokenOne) used for determining liquidity pairs.
+// @audit-answered-question - What happen with AStaticTokenData? It's not used, so LINK is not able to be used here, or yes?
+// @audit-answer - It is used for counterparty, LINK is not needed here.
 contract UniswapAdapter is AStaticUSDCData {
     error UniswapAdapter__TransferFailed();
 
@@ -44,7 +46,8 @@ contract UniswapAdapter is AStaticUSDCData {
      * @param token The vault's underlying asset token
      * @param amount The amount of vault's underlying asset token to use for the investment
      */
-    // @audit-question - How we track how much assets the user has invested here? Checking the LPs?
+    // @audit-answered-question - How we track how much assets the user has invested here? Checking the LPs?
+    // @audit-answer - Currently, invested assets are NOT correctly tracked in `totalAssets()` (See Issue in VaultShares.sol: modifier divestThenInvest).
     function _uniswapInvest(IERC20 token, uint256 amount) internal {
         // @audit-info - Missing check for zero amount
         // @audit-answered-question - What happen if I send here another random token?
@@ -144,7 +147,8 @@ contract UniswapAdapter is AStaticUSDCData {
      */
     function _uniswapDivest(IERC20 token, uint256 liquidityAmount) internal returns (uint256 amountOfAssetReturned) {
         // @audit-info - Missing check for zero amount
-        // @audit-question - What happen if I send here another random token?
+        // @audit-answered-question - What happen if I send here another random token?
+        // @audit-answer - Not posible to send another random token since the function is internal and it is previous protected.
         // @audit-info - Missing check for valid token
         IERC20 counterPartyToken = token == i_weth ? i_tokenOne : i_weth;
 

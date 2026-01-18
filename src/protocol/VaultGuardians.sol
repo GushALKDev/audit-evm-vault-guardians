@@ -73,9 +73,15 @@ contract VaultGuardians is Ownable, VaultGuardiansBase {
      * @param newStakePrice The new stake price in wei
      */
      // @audit-info - Centralization issue, a compromised owner can update the stake price
-     // @audit-question - What is this price used for?
-     // @audit-question - Should it be protected of zero value?
+     // @audit-answered-question - What is this price used for?
+     // @audit-answer - It is the amount of tokens required to stake to become a guardian (Sybil protection / Economic spam filter).
+     // @audit-answered-question - Should it be protected of zero value?
+     // @audit-answer - Yes. Setting it to zero allows cost-free guardian creation, leading to potential spam/DoS of the registry with junk vaults.
     function updateGuardianStakePrice(uint256 newStakePrice) external onlyOwner {
+        // @audit-issue - HIGH -> IMPACT: MEDIUM/HIGH - LIKELIHOOD: LOW
+        // @audit-issue - Missing non-zero check for newStakePrice.
+        // @audit-issue - If set to 0, it enables cost-free guardian creation (Spam/Sybil Attack vector).
+        // @audit-issue - RECOMMENDED MITIGATION: require(newStakePrice > 0, "Stake price cannot be zero");
         s_guardianStakePrice = newStakePrice;
         // @audit-issue - MEDIUM -> IMPACT: LOW -> LIKELIHOOD: HIGH
         // @audit-issue - s_guardianStakePrice is already updated here, so, in the event is equal to the newStakePrice
@@ -89,11 +95,19 @@ contract VaultGuardians is Ownable, VaultGuardiansBase {
      * @dev this value will be divided by the number of shares whenever a user deposits into a vault
      * @dev historical vaults will not have their cuts updated, only vaults moving forward
      */
-     // @audit-question - What is this cut used for?
-     // @audit-question - What is the range of this cut and its exact formular?
-     // @audit-question - Should it be protected of zero value?
+     // @audit-answered-question - What is this cut used for?
+     // @audit-answer - It is the percentage of the vault's share that guardians and DAOs receive when a new vault is created.
+     // @audit-answered-question - What is the range of this cut and its exact formular?
+     // @audit-answer - The cut is a percentage of the total shares, so it ranges from 0 to 100%.
+     // @audit-answered-question - Should it be protected of zero value?
+     // @audit-answer - Yes. Setting it to zero would allow guardians to receive no share of the vault's share, which could be exploited to prevent guardians from receiving any share of the vault's share.
      // @audit-info - Centralization issue, a compromised owner can update the cut
     function updateGuardianAndDaoCut(uint256 newCut) external onlyOwner {
+        // @audit-issue - MEDIUM -> IMPACT: HIGH - LIKELIHOOD: LOW
+        // @audit-issue - Missing validation for newCut.
+        // @audit-issue - If set to 0, `VaultShares.deposit` will revert due to division by zero (shares / cut), causing DoS on all new vaults.
+        // @audit-issue - If set to a small value (e.g. 1), it causes massive share inflation (100% fee).
+        // @audit-issue - RECOMMENDED MITIGATION: require(newCut >= MIN_CUT, "Cut too small or zero");
         s_guardianAndDaoCut = newCut;
         // @audit-issue - MEDIUM -> IMPACT: LOW -> LIKELIHOOD: HIGH
         // @audit-issue - s_guardianAndDaoCut is already updated here, so, in the event is equal to the newCut
@@ -110,11 +124,13 @@ contract VaultGuardians is Ownable, VaultGuardiansBase {
      * @dev Since this is owned by the DAO, the funds will always go to the DAO. 
      * @param asset The ERC20 to sweep
      */
-     // @audit-question - Is any ERC20 sent to this contract at any point?
+     // @audit-answered-question - Is any ERC20 sent to this contract at any point?
+     // @audit-answer - Yes, this contract will hold the DAO fees.
     function sweepErc20s(IERC20 asset) external {
         uint256 amount = asset.balanceOf(address(this));
         emit VaultGuardians__SweptTokens(address(asset));
-        // @audit-question - Is the owner the right address to send the funds to?
+        // @audit-answered-question - Is the owner the right address to send the funds to?
+        // @audit-answer - Yes, the owner is the DAO.
         asset.safeTransfer(owner(), amount);
     }
     

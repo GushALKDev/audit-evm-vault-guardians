@@ -10,8 +10,10 @@ contract VaultGuardianToken is ERC20, ERC20Permit, ERC20Votes, Ownable {
     constructor() ERC20("VaultGuardianToken", "VGT") ERC20Permit("VaultGuardianToken") Ownable(msg.sender) {}
 
     // The following functions are overrides required by Solidity.
-    // @audit-question - Is this necessary?
-    // @audit-question - Should it be protected by onlyOwner?
+    // @audit-answered-question - Is this necessary?
+    // @audit-answer - Yes, it is required by Solidity to resolve inheritance conflict between ERC20 and ERC20Votes overrides.
+    // @audit-answered-question - Should it be protected by onlyOwner?
+    // @audit-answer - No. _update is internal and called on every transfer/mint/burn.
     function _update(address from, address to, uint256 value) internal override(ERC20, ERC20Votes) {
         super._update(from, to, value);
     }

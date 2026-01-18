@@ -5,7 +5,8 @@ pragma solidity 0.8.20;
 // https://github.com/Uniswap/v2-periphery/blob/master/contracts/interfaces/IUniswapV2Router01.sol
 interface IUniswapV2Router01 {
     // We've made these view instead of pure to make testing easier
-    // @audit-question - Should them be returned to pure?
+    // @audit-answered-question - Should them be returned to pure?
+    // @audit-answer - No. `view` is compatible with both `pure` and `view` implementations. Keeping it `view` allows for flexible mocking during tests.
     function factory() external view returns (address);
     function WETH() external view returns (address);
 

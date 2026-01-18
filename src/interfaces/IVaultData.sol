@@ -8,7 +8,8 @@ interface IVaultData {
      * @notice uniswapAllocation is the ratio of tokens to add as liquidity in Uniswap v2
      * @notice aaveAllocation is the ratio of tokens to provide as lending amount in Aave v3
      */
-     // @audit-question - How is ratio stored or calculated?
+     // @audit-answered-question - How is ratio stored or calculated?
+     // @audit-answer - The ratio is stored as a percentage, the sum of all ratios should be 100% -> 1000
      // @audit-note - This is the "investable universe"
     struct AllocationData {
         uint256 holdAllocation; // hodl

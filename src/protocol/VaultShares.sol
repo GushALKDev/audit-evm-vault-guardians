@@ -8,7 +8,8 @@ import {UniswapAdapter} from "./investableUniverseAdapters/UniswapAdapter.sol";
 import {DataTypes} from "../vendor/DataTypes.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-// @audit-question - Is ReentrancyGuard well positioned at the far right of inheritance?
+// @audit-answered-question - Is ReentrancyGuard well positioned at the far right of inheritance?
+// @audit-answer - Yes, the crucial part is using the nonReentrant modifier before other checks in functions.
 contract VaultShares is ERC4626, IVaultShares, AaveAdapter, UniswapAdapter, ReentrancyGuard {
     error VaultShares__DepositMoreThanMax(uint256 amount, uint256 max);
     error VaultShares__NotGuardian();
@@ -125,8 +126,10 @@ contract VaultShares is ERC4626, IVaultShares, AaveAdapter, UniswapAdapter, Reen
     // @audit-note - Guardian is the guardian of the vault
     // @audit-note - Guardian and DAO cut is the percentage of the cut that goes to the guardian and the DAO
     // @audit-note - Vault guardians is the contract that manages the guardians
-    // @audit-question - What tokens can be used as underlying token?
-    // @audit-question - Is is protected in any way?
+    // @audit-answered-question - What tokens can be used as underlying token?
+    // @audit-answer - WETH,USDC and LINK.
+    // @audit-answered-question - Is is protected in any way?
+    // @audit-answer - Yes, It's protected at VaultGuardiansBase::becomeGuardian() and VaultGuardiansBase::becomeTokenGuardian()
     constructor(ConstructorData memory constructorData)
         ERC4626(constructorData.asset)
         ERC20(constructorData.vaultName, constructorData.vaultSymbol)

@@ -65,11 +65,12 @@ contract VaultGuardiansBase is AStaticTokenData, IVaultData {
     //////////////////////////////////////////////////////////////*/
     address private immutable i_aavePool;
     address private immutable i_uniswapV2Router;
-    // @audit-question - Is this the Governance token?
+    // @audit-answered-question - Is this the Governance token?
+    // @audit-answer - Yes, this is the Governance token.
     VaultGuardianToken private immutable i_vgToken;
 
-    // @audit-question - Is this fee paid or received by the guardian?
-    // @audit-note // Fee paid by the guardian in ETH
+    // @audit-answered-question - Is this fee paid or received by the guardian?
+    // @audit-answer - Fee paid by the guardian in ETH
     uint256 private constant GUARDIAN_FEE = 0.1 ether;
 
     // DAO updatable values
@@ -82,11 +83,13 @@ contract VaultGuardiansBase is AStaticTokenData, IVaultData {
     uint256 internal s_guardianStakePrice = 10 ether;
     // @audit-note - Temporary fix for audit testing to support USDC (1e9 USDC) and WETH (0.001 ETH) - UNCOMMENT TO RUN FORK TESTS
     // @audit-note - uint256 internal s_guardianStakePrice = 1e15;
-    // @audit-question - Should this value be the same here and in the VaultShares?
+    // @audit-answered-question - Should this value be the same here and in the VaultShares?
+    // @audit-answer - Yes, this value should be the same here and in the VaultShares.
     uint256 internal s_guardianAndDaoCut = 1000;
 
     // The guardian's address mapped to the asset, mapped to the allocation data
-    // @audit-question - IVaultShares ConstructorData has usdc and weth hardcoded, what about LINK?
+    // @audit-answered-question - IVaultShares ConstructorData has usdc and weth hardcoded, what about LINK?
+    // @audit-answer - Not neccesary, USDC and WETH are there as the counterparty in Uniswap
     mapping(address guardianAddress => mapping(IERC20 asset => IVaultShares vaultShares)) private s_guardians;
     mapping(address token => bool approved) private s_isApprovedToken;
 
@@ -176,7 +179,8 @@ contract VaultGuardiansBase is AStaticTokenData, IVaultData {
      * @param allocationData A struct indicating the ratio of asset tokens to hold, invest in Aave and Uniswap (based on Vault Guardian strategy)
      * @param token The token to become a Vault Guardian for
      */
-     // @audit-question - The stake should be refunded to the guardian if he close the vault?
+     // @audit-answered-question - The stake should be refunded to the guardian if he close the vault?
+     // @audit-answer - Yes, it should be refunded.
     function becomeTokenGuardian(AllocationData memory allocationData, IERC20 token)
         external
         onlyGuardian(i_weth)
@@ -331,7 +335,8 @@ contract VaultGuardiansBase is AStaticTokenData, IVaultData {
     // @audit-issue - HIGH -> IMPACT: HIGH - LIKELIHOOD: HIGH
     // @audit-issue - The GUARDIAN_FEE in ETH is not received by the contract at any point
     // @audit-issue - RECOMMENDED MITIGATION: Mark the function as payable, transfer the ETH to the contract and check if the amount is correct.
-    // @audit-question - What happens if someone calls in a loop to this function with the same token/vault?
+    // @audit-answered-question - What happens if someone calls in a loop to this function with the same token/vault?
+    // @audit-answer - Users can call the public wrapper functions repeatedly. This overwrites the vault in the registry (orphaning the old one) AND allows infinite minting of VGT (See Governance Inflation Issue below).
     function _becomeTokenGuardian(IERC20 token, VaultShares tokenVault) private returns (address) {
         // @audit-info - Missing address zero check
         // @audit-issue - HIGH -> IMPACT: HIGH - LIKELIHOOD: MEDIUM
@@ -339,6 +344,11 @@ contract VaultGuardiansBase is AStaticTokenData, IVaultData {
         // @audit-issue - RECOMMENDED MITIGATION: Check if the guardian is already guarding this token
         s_guardians[msg.sender][token] = IVaultShares(address(tokenVault));
         emit GuardianAdded(msg.sender, token);
+        // @audit-issue - HIGH -> IMPACT: HIGH - LIKELIHOOD: MEDIUM
+        // @audit-issue - Governance Inflation: Calling public wrapper functions in a loop allows infinite minting of VGT.
+        // @audit-issue - The user can recover their stake by calling `redeem` directly on the orphaned vault (bypassing registry).
+        // @audit-issue - PoC: VaultGuardiansTest::test_exploitInfiniteGovernanceMinting
+        // @audit-issue - RECOMMENDED MITIGATION: Implement `burn` in VaultGuardianToken and burn VGT in `quitGuardian`, AND prevent overwriting active vaults.
         i_vgToken.mint(msg.sender, s_guardianStakePrice);
         // @audit-note - The Guardian send the deposit tokens to this contract
         token.safeTransferFrom(msg.sender, address(this), s_guardianStakePrice);

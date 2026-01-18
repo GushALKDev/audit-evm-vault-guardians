@@ -5,8 +5,10 @@ import {IPool} from "../../vendor/IPool.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-// @audit-question - Why AStaticTokenData is not inherited here and it is in UniswapAdapter?
-// @audit-question - It does mean that any token is accepted? Is it an issue?
+// @audit-answered-question - Why AStaticTokenData is not inherited here and it is in UniswapAdapter?
+// @audit-answer - AaveAdapter is designed to be generic and relies on the Aave Pool for asset validation.
+// @audit-answered-question - It does mean that any token is accepted? Is it an issue?
+// @audit-answer - Any token supported by the Aave Pool is accepted. Aave will revert if the token is not a supported reserve. This is fine.
 contract AaveAdapter {
     using SafeERC20 for IERC20;
 
@@ -48,14 +50,18 @@ contract AaveAdapter {
      * @param amount The amount of vault's underlying asset token to withdraw
      */
     function _aaveDivest(IERC20 token, uint256 amount) internal returns (uint256 amountOfAssetReturned) {
-        // @audit-question - Is necessary this returned value?
-        i_aavePool.withdraw({
+        // @audit-answered-question - Is necessary this returned value?
+        // @audit-answer - Yes, standard practice to return amounts. But implementation is missing assignment.
+        // @audit-issue - LOW - Missing assignment of return value from aavePool.withdraw
+        amountOfAssetReturned = i_aavePool.withdraw({
             asset: address(token),
             amount: amount,
-            // @audit-question - This is not the vault, it's the adapter, should not put the vault address (msg.sender) on to?
+            // @audit-answered-question - This is not the vault, it's the adapter, should not put the vault address (msg.sender) on to?
+            // @audit-answer - VaultShares inherits AaveAdapter, so `address(this)` IS the Vault.
             to: address(this)
         });
-        // @audit-question - There is a missing return value here, is it necessary?
+        // @audit-answered-question - There is a missing return value here, is it necessary?
+        // @audit-answer - It is not missing, amountOfAssetReturned is the return value.
         // @audit-issue - LOW -> IMPACT: LOW - LIKELIHOOD: HIGH
         // @audit-issue - Missing event
     }
