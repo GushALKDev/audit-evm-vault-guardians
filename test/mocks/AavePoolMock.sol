@@ -3,6 +3,8 @@ pragma solidity 0.8.20;
 
 import {IPool, DataTypes} from "../../src/vendor/IPool.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+// @audit-note - Uncomment the following import to enable the fix for PoC testing
+// import {ERC20Mock} from "./ERC20Mock.sol";
 
 contract AavePoolMock is IPool {
     mapping(address => address) public s_assetToAtoken;
@@ -16,12 +18,25 @@ contract AavePoolMock is IPool {
         // @audit-issue - We should check the return value of transferFrom to revert if it fails
         // @audit-issue - if weirdERC20 tokens could be used, we should use safeTransferFrom.
         IERC20(asset).transferFrom(msg.sender, address(this), amount);
+        
+        // @audit-note - FIX FOR POC: Uncomment the following lines to mint aTokens (required for test_exploit_MintTheft)
+        // address aToken = s_assetToAtoken[asset];
+        // if (aToken != address(0)) {
+        //     ERC20Mock(aToken).mint(amount, msg.sender);
+        // }
     }
 
     function withdraw(address asset, uint256 amount, address to) external returns (uint256) {
         // @audit-issue - MEDIUM -> IMPACT: HIGH -> LIKELIHOOD: LOW
         // @audit-issue - We should check the return value of transfer to revert if it fails
         // @audit-issue - if weirdERC20 tokens could be used, we should use safeTransfer.
+        
+        // @audit-note - FIX FOR POC: Uncomment the following lines to burn aTokens (required for test_exploit_MintTheft)
+        // address aToken = s_assetToAtoken[asset];
+        // if (aToken != address(0)) {
+        //     ERC20Mock(aToken).burn(amount, msg.sender);
+        // }
+        
         IERC20(asset).transfer(to, amount);
         return amount;
     }

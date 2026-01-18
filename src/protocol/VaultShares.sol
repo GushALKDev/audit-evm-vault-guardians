@@ -79,9 +79,9 @@ contract VaultShares is ERC4626, IVaultShares, AaveAdapter, UniswapAdapter, Reen
      // @audit-answered-question - Could this modifier have a reentrancy issue?
      // @audit-answer - Yes, because it depends on the order of modifiers in the function.
      // @audit-issue - MEDIUM -> IMPACT: LOW/MEDIUM - LIKELIHOOD: HIGH
-     // @audit-issue - This design is inefficient. Divesting and investing everything on every deposit/withdraw/redeem is expensive in gas terms and could lead to sandwich attacks if the vault manages a large amount of funds.
-     // @audit-issue - In addition, integration with other protocols will fail because totalAssets() will return only the assets held in the vault, not the total amount including invested funds.
-     // @audit-issue - RECOMMENDED MITIGATION: Implement active accounting for totalAssets and partial divest/invest actions.
+     // @audit-issue - This design is inefficient. Divesting and investing everything on every `deposit`/`withdraw`/`redeem` is expensive in gas terms and could lead to sandwich attacks if the vault manages a large amount of funds.
+     // @audit-issue - In addition, integration with other protocols will fail because `totalAssets()` will return only the assets held in the vault, not the total amount including invested funds.
+     // @audit-issue - RECOMMENDED MITIGATION: Implement active accounting for `totalAssets` and partial divest/invest actions.
     modifier divestThenInvest() {
         uint256 uniswapLiquidityTokensBalance = i_uniswapLiquidityToken.balanceOf(address(this));
         uint256 aaveAtokensBalance = i_aaveAToken.balanceOf(address(this));
@@ -148,13 +148,13 @@ contract VaultShares is ERC4626, IVaultShares, AaveAdapter, UniswapAdapter, Reen
             IERC20(IPool(constructorData.aavePool).getReserveData(address(constructorData.asset)).aTokenAddress);
         i_uniswapLiquidityToken = IERC20(i_uniswapFactory.getPair(address(constructorData.asset), address(i_weth)));
         // @audit-issue - HIGH -> IMPACT: HIGH - LIKELIHOOD: HIGH
-        // @audit-issue - When asset is WETH, this calls getPair(WETH, WETH) which returns address(0).
-        // @audit-issue - The modifier divestThenInvest calls balanceOf on address(0), causing revert.
-        // @audit-issue - This breaks quitGuardian, redeem, withdraw, and deposit for WETH vaults.
-        // @audit-issue - PoC: GuardianForkFuzzTest::testFuzz_quitGuardian() on mainnet fork.
+        // @audit-issue - When asset is WETH, this calls `getPair(WETH, WETH)` which returns `address(0)`.
+        // @audit-issue - The modifier `divestThenInvest` calls `balanceOf` on `address(0)`, causing revert.
+        // @audit-issue - This breaks `quitGuardian`, `redeem`, `withdraw`, and `deposit` for WETH vaults.
+        // @audit-issue - PoC: `GuardianForkFuzzTest::testFuzz_quitGuardian()` on mainnet fork.
         // @audit-issue - RECOMMENDED MITIGATION: Use USDC as counterparty when asset is WETH:
         // @audit-issue - `address pairToken = address(constructorData.asset) == address(i_weth) ? address(i_tokenOne) : address(i_weth);`
-        // @audit-issue - FIX: When asset is WETH, pair with USDC (i_tokenOne). Otherwise pair with WETH.
+        // @audit-issue - FIX: When asset is WETH, pair with USDC (`i_tokenOne`). Otherwise pair with WETH.
 
         // @audit-note - Added on audit for testing purposes - UNCOMMENT TO FIX TESTS
         // @audit-note - address pairToken = address(constructorData.asset) == address(i_weth) 
@@ -187,7 +187,7 @@ contract VaultShares is ERC4626, IVaultShares, AaveAdapter, UniswapAdapter, Reen
         emit UpdatedAllocation(tokenAllocationData);
         // @audit-issue - MEDIUM -> IMPACT: LOW/MEDIUM - LIKELIHOOD: HIGH
         // @audit-issue - Updating allocation data without rebalancing creates a discrepancy between the intended strategy and the actual location of funds.
-        // @audit-issue - RECOMMENDED MITIGATION: Call rebalanceFunds() automatically (or based in a boolean parameter) or clearly document that rebalancing is "lazy" and must be triggered manually/by user interaction.
+        // @audit-issue - RECOMMENDED MITIGATION: Call `rebalanceFunds()` automatically (or based in a boolean parameter) or clearly document that rebalancing is "lazy" and must be triggered manually/by user interaction.
     }
 
     /**
@@ -214,9 +214,17 @@ contract VaultShares is ERC4626, IVaultShares, AaveAdapter, UniswapAdapter, Reen
         _deposit(_msgSender(), receiver, assets, shares);
 
         // @audit-issue - HIGH - IMPACT: MEDIUM - LIKELIHOOD: HIGH
-        // @audit-issue - The minting of shares to the guardian and the DAO are inflating the total supply of the vault, they should be deducted from the shares to be minted to avoid dilution. After a user deposit of 100 assets, the vault will mint 100% of previewed shares to the user, but it will also mint (shares / i_guardianAndDaoCut) to the guardian and (shares / i_guardianAndDaoCut) to the DAO.
-        // @audit-issue - PoC: VaultSharesTest::testSharesDilutionOnDeposit()
+        // @audit-issue - The minting of shares to the guardian and the DAO are inflating the total supply of the vault, they should be deducted from the shares to be minted to avoid dilution. After a user deposit of 100 assets, the vault will mint 100% of previewed shares to the user, but it will also mint (`shares / i_guardianAndDaoCut`) to the guardian and (`shares / i_guardianAndDaoCut`) to the DAO.
+        // @audit-issue - PoC: `VaultSharesTest::testSharesDilutionOnDeposit()`.
         // @audit-issue - RECOMMENDED MITIGATION: Deducting the guardian's and the DAO's shares from the total shares to be minted.
+
+        // @audit-issue - HIGH -> IMPACT: HIGH - LIKELIHOOD: HIGH
+        // @audit-issue - MISSING OVERRIDE OF `mint()`: The `mint()` function from ERC4626 is not overridden and lacks the `divestThenInvest` modifier.
+        // @audit-issue - An attacker can call `mint()` when funds are invested (`totalAssets()` ~ 0).
+        // @audit-issue - Due to broken accounting, `previewMint()` calculates 0 assets required for new shares.
+        // @audit-issue - Attacker mints shares for free, then calls `redeem()` (which pulls funds) to drain the vault.
+        // @audit-issue - PoC: `VaultGuardiansTest::test_exploitMintTheft()`.
+        // @audit-issue - RECOMMENDED MITIGATION: Override `mint()` and apply `divestThenInvest`, or fix internal accounting.
         _mint(i_guardian, shares / i_guardianAndDaoCut);
         _mint(i_vaultGuardians, shares / i_guardianAndDaoCut);
 
@@ -239,10 +247,10 @@ contract VaultShares is ERC4626, IVaultShares, AaveAdapter, UniswapAdapter, Reen
 
         // @audit-issue - HIGH -> IMPACT: HIGH - LIKELIHOOD: HIGH
         // @audit-issue - Missing check for zero amount before calling adapters.
-        // @audit-issue - When uniswapAllocation=0 or aaveAllocation=0, the adapters are called with amount=0.
-        // @audit-issue - Aave rejects supply(0) with error 26 (INVALID_AMOUNT).
-        // @audit-issue - This breaks becomeGuardian and deposit for any allocation where one of them is 0.
-        // @audit-issue - PoC: GuardianForkFuzzTest::testFuzz_becomeGuardian() on mainnet fork.
+        // @audit-issue - When `uniswapAllocation=0` or `aaveAllocation=0`, the adapters are called with `amount=0`.
+        // @audit-issue - Aave rejects `supply(0)` with error 26 (`INVALID_AMOUNT`).
+        // @audit-issue - This breaks `becomeGuardian()` and `deposit()` for any allocation where one of them is 0.
+        // @audit-issue - PoC: `GuardianForkFuzzTest::testFuzz_becomeGuardian()` on mainnet fork.
         // @audit-issue - RECOMMENDED MITIGATION: Add checks before calling adapters:
         // @audit-issue - `if (uniswapAllocation > 0) { _uniswapInvest(...); }`
         // @audit-issue - `if (aaveAllocation > 0) { _aaveInvest(...); }`

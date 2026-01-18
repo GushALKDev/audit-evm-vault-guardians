@@ -27,8 +27,8 @@ contract AaveAdapter {
      */
     function _aaveInvest(IERC20 asset, uint256 amount) internal {
         // @audit-issue - MEDIUM -> IMPACT: MEDIUM - LIKELIHOOD: LOW
-        // @audit-issue - Weird ERC20 could have weird returns
-        // @audit-issue - RECOMMENDED MITIGATION: Use forceApprove from safeERC20 library
+        // @audit-issue - Weird ERC20 could have weird returns.
+        // @audit-issue - RECOMMENDED MITIGATION: Use `forceApprove` from `SafeERC20` library.
         bool succ = asset.approve(address(i_aavePool), amount);
         if (!succ) {
             revert AaveAdapter__TransferFailed();
@@ -52,7 +52,7 @@ contract AaveAdapter {
     function _aaveDivest(IERC20 token, uint256 amount) internal returns (uint256 amountOfAssetReturned) {
         // @audit-answered-question - Is necessary this returned value?
         // @audit-answer - Yes, standard practice to return amounts. But implementation is missing assignment.
-        // @audit-issue - LOW - Missing assignment of return value from aavePool.withdraw
+        // @audit-issue - LOW - Missing assignment of return value from `aavePool.withdraw()`.
         amountOfAssetReturned = i_aavePool.withdraw({
             asset: address(token),
             amount: amount,

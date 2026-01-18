@@ -84,8 +84,8 @@ contract VaultGuardians is Ownable, VaultGuardiansBase {
         // @audit-issue - RECOMMENDED MITIGATION: require(newStakePrice > 0, "Stake price cannot be zero");
         s_guardianStakePrice = newStakePrice;
         // @audit-issue - MEDIUM -> IMPACT: LOW -> LIKELIHOOD: HIGH
-        // @audit-issue - s_guardianStakePrice is already updated here, so, in the event is equal to the newStakePrice
-        // @audit-issue - RECOMMENDED MITIGATION: Emit the old value before updating the state variable
+        // @audit-issue - `s_guardianStakePrice` is already updated here, so, in the event is equal to the `newStakePrice`.
+        // @audit-issue - RECOMMENDED MITIGATION: Emit the old value before updating the state variable.
         emit VaultGuardians__UpdatedStakePrice(s_guardianStakePrice, newStakePrice);
     }
 
@@ -104,17 +104,17 @@ contract VaultGuardians is Ownable, VaultGuardiansBase {
      // @audit-info - Centralization issue, a compromised owner can update the cut
     function updateGuardianAndDaoCut(uint256 newCut) external onlyOwner {
         // @audit-issue - MEDIUM -> IMPACT: HIGH - LIKELIHOOD: LOW
-        // @audit-issue - Missing validation for newCut.
-        // @audit-issue - If set to 0, `VaultShares.deposit` will revert due to division by zero (shares / cut), causing DoS on all new vaults.
+        // @audit-issue - Missing validation for `newCut`.
+        // @audit-issue - If set to 0, `VaultShares.deposit()` will revert due to division by zero (`shares / cut`), causing DoS on all new vaults.
         // @audit-issue - If set to a small value (e.g. 1), it causes massive share inflation (100% fee).
-        // @audit-issue - RECOMMENDED MITIGATION: require(newCut >= MIN_CUT, "Cut too small or zero");
+        // @audit-issue - RECOMMENDED MITIGATION: `require(newCut >= MIN_CUT, "Cut too small or zero");`
         s_guardianAndDaoCut = newCut;
         // @audit-issue - MEDIUM -> IMPACT: LOW -> LIKELIHOOD: HIGH
-        // @audit-issue - s_guardianAndDaoCut is already updated here, so, in the event is equal to the newCut
-        // @audit-issue - RECOMMENDED MITIGATION: Emit the old value before updating the state variable
+        // @audit-issue - `s_guardianAndDaoCut` is already updated here, so, in the event is equal to the `newCut`.
+        // @audit-issue - RECOMMENDED MITIGATION: Emit the old value before updating the state variable.
         // @audit-issue - MEDIUM -> IMPACT: LOW -> LIKELIHOOD: HIGH
-        // @audit-issue - The name of this event is wrong, it should be VaultGuardians__UpdatedGuardianAndDaoCut
-        // @audit-issue - RECOMMENDED MITIGATION: Rename the event to VaultGuardians__UpdatedGuardianAndDaoCut and create it.
+        // @audit-issue - The name of this event is wrong, it should be `VaultGuardians__UpdatedGuardianAndDaoCut`.
+        // @audit-issue - RECOMMENDED MITIGATION: Rename the event to `VaultGuardians__UpdatedGuardianAndDaoCut` and create it.
         emit VaultGuardians__UpdatedStakePrice(s_guardianAndDaoCut, newCut);
     }
 
@@ -136,7 +136,7 @@ contract VaultGuardians is Ownable, VaultGuardiansBase {
     
     // @audit-issue - HIGH -> IMPACT: HIGH -> LIKELIHOOD: HIGH
     // @audit-issue - ETH stuck in contract & Unsafe Token Fee withdrawal.
-    // @audit-issue - ETH Fees: The contract receives ETH from `becomeGuardian` but has NO function to withdraw it. Funds are permanently locked.
-    // @audit-issue - Token Fees: If DAO fees (shares) are sent to this contract, the only way to withdraw them is check-all `sweepErc20s`, which is intended for dust/error recovery, not regular fee management.
+    // @audit-issue - ETH Fees: The contract receives ETH from `becomeGuardian()` but has NO function to withdraw it. Funds are permanently locked.
+    // @audit-issue - Token Fees: If DAO fees (shares) are sent to this contract, the only way to withdraw them is `sweepErc20s()`, which is intended for dust/error recovery, not regular fee management.
     // @audit-issue - RECOMMENDED MITIGATION: Add `withdrawEth()` and a dedicated `withdrawFees(token, amount)` function.
 }

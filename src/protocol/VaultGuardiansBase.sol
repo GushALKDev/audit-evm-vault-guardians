@@ -241,7 +241,7 @@ contract VaultGuardiansBase is AStaticTokenData, IVaultData {
     function quitGuardian() external onlyGuardian(i_weth) returns (uint256) {
         if (_guardianHasNonWethVaults(msg.sender)) {
             // @audit-issue - LOW -> IMPACT: LOW - LIKELIHOOD: MEDIUM
-            // @audit-issue - The custom error is wrong, it should be VaultGuardiansBase__CantQuitGuardianWithNonWethVaults()
+            // @audit-issue - The custom error is wrong, it should be `VaultGuardiansBase__CantQuitGuardianWithNonWethVaults()`.
             revert VaultGuardiansBase__CantQuitWethWithThisFunction();
         }
         return _quitGuardian(i_weth);
@@ -291,22 +291,22 @@ contract VaultGuardiansBase is AStaticTokenData, IVaultData {
         // @audit-issue - Setting the mapping to 0 breaks the connection to the vault.
         // @audit-issue - Users rely on this mapping to find the vault address to withdraw their funds.
         // @audit-issue - If we delete it, the vault becomes orphaned and users won't know where to properly withdraw, contradicting the docs.
-        // @audit-issue - RECOMMENDED MITIGATION: Only set the vault as Not active, but do not reset the mapping to address(0).
+        // @audit-issue - RECOMMENDED MITIGATION: Only set the vault as Not active, but do not reset the mapping to `address(0)`.
         s_guardians[msg.sender][token] = IVaultShares(address(0));
         emit GaurdianRemoved(msg.sender, token);
         tokenVault.setNotActive();
         // @audit-issue - HIGH -> IMPACT: HIGH - LIKELIHOOD: HIGH
-        // @audit-issue - Guardian cannot quit because VaultGuardians calls redeem on behalf of the guardian without allowance.
-        // @audit-issue - When VaultGuardians calls tokenVault.redeem(), msg.sender is VaultGuardians, but owner is the guardian.
-        // @audit-issue - ERC4626 requires allowance when msg.sender != owner, causing ERC20InsufficientAllowance revert.
+        // @audit-issue - Guardian cannot quit because `VaultGuardians` calls `redeem()` on behalf of the guardian without allowance.
+        // @audit-issue - When `VaultGuardians` calls `tokenVault.redeem()`, `msg.sender` is `VaultGuardians`, but `owner` is the guardian.
+        // @audit-issue - ERC4626 requires allowance when `msg.sender != owner`, causing `ERC20InsufficientAllowance` revert.
         // @audit-issue - This blocks the guardian from withdrawing their stake and closing the vault.
-        // @audit-issue - PoC: GuardianForkFuzzTest::testFuzz_quitGuardian()
-        // @audit-issue - RECOMMENDED MITIGATION: Add a bypass in VaultShares.redeem() when VaultGuardians redeems for the guardian:
+        // @audit-issue - PoC: `GuardianForkFuzzTest::testFuzz_quitGuardian()`.
+        // @audit-issue - RECOMMENDED MITIGATION: Add a bypass in `VaultShares.redeem()` when `VaultGuardians` redeems for the guardian:
         // @audit-issue - `if (msg.sender == i_vaultGuardians && owner == i_guardian) { /* bypass allowance */ }`
         // @audit-issue - TRADE-OFFS CONSIDERED:
-        // @audit-issue - 1. Auto-approve in deposit: Rejected because infinite allowances are a known attack vector.
-        // @audit-issue - 2. Separate function redeemForGuardian: More invasive, requires interface changes.
-        // @audit-issue - 3. Two transactions (quit + manual redeem): Poor UX.
+        // @audit-issue - 1. Auto-approve in `deposit()`: Rejected because infinite allowances are a known attack vector.
+        // @audit-issue - 2. Separate function `redeemForGuardian()`: More invasive, requires interface changes.
+        // @audit-issue - 3. Two transactions (`quit` + manual `redeem`): Poor UX.
         // @audit-issue - The bypass solution is preferred because it has no persistent state, requires double validation, and is controlled by the guardian.
         uint256 maxRedeemable = tokenVault.maxRedeem(msg.sender);
         uint256 numberOfAssetsReturned = tokenVault.redeem(maxRedeemable, msg.sender, msg.sender);
@@ -333,10 +333,14 @@ contract VaultGuardiansBase is AStaticTokenData, IVaultData {
      * @param tokenVault the vault that the guardian will be guarding
      */
     // @audit-issue - HIGH -> IMPACT: HIGH - LIKELIHOOD: HIGH
-    // @audit-issue - The GUARDIAN_FEE in ETH is not received by the contract at any point
-    // @audit-issue - RECOMMENDED MITIGATION: Mark the function as payable, transfer the ETH to the contract and check if the amount is correct.
+    // @audit-issue - The `GUARDIAN_FEE` in ETH is not received by the contract at any point.
+    // @audit-issue - RECOMMENDED MITIGATION: Mark the function as `payable`, transfer the ETH to the contract and check if the amount is correct.
     // @audit-answered-question - What happens if someone calls in a loop to this function with the same token/vault?
     // @audit-answer - Users can call the public wrapper functions repeatedly. This overwrites the vault in the registry (orphaning the old one) AND allows infinite minting of VGT (See Governance Inflation Issue below).
+    // @audit-info - Incompatible with Fee-On-Transfer tokens.
+    // @audit-info - If a token with transfer fees is used, `quitGuardian` will fail because the contract
+    // @audit-info - receives less than `s_guardianStakePrice` but tries to transfer back the full amount.
+    // @audit-info - Ensure only standard ERC20s (WETH, USDC, LINK) are whitelisted.
     function _becomeTokenGuardian(IERC20 token, VaultShares tokenVault) private returns (address) {
         // @audit-info - Missing address zero check
         // @audit-issue - HIGH -> IMPACT: HIGH - LIKELIHOOD: MEDIUM
