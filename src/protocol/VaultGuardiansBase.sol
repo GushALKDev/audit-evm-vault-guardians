@@ -80,6 +80,8 @@ contract VaultGuardiansBase is AStaticTokenData, IVaultData {
     // @audit-issue - In adition, the difference in value between tokens with 18 decimales I.E LINK and WETH make no sense.
     // @audit-issue - This value should be token dependant.
     uint256 internal s_guardianStakePrice = 10 ether;
+    // @audit-note - Temporary fix for audit testing to support USDC (1e9 USDC) and WETH (0.001 ETH) - UNCOMMENT TO RUN FORK TESTS
+    // @audit-note - uint256 internal s_guardianStakePrice = 1e15;
     // @audit-question - Should this value be the same here and in the VaultShares?
     uint256 internal s_guardianAndDaoCut = 1000;
 
@@ -289,6 +291,19 @@ contract VaultGuardiansBase is AStaticTokenData, IVaultData {
         s_guardians[msg.sender][token] = IVaultShares(address(0));
         emit GaurdianRemoved(msg.sender, token);
         tokenVault.setNotActive();
+        // @audit-issue - HIGH -> IMPACT: HIGH - LIKELIHOOD: HIGH
+        // @audit-issue - Guardian cannot quit because VaultGuardians calls redeem on behalf of the guardian without allowance.
+        // @audit-issue - When VaultGuardians calls tokenVault.redeem(), msg.sender is VaultGuardians, but owner is the guardian.
+        // @audit-issue - ERC4626 requires allowance when msg.sender != owner, causing ERC20InsufficientAllowance revert.
+        // @audit-issue - This blocks the guardian from withdrawing their stake and closing the vault.
+        // @audit-issue - PoC: GuardianForkFuzzTest::testFuzz_quitGuardian()
+        // @audit-issue - RECOMMENDED MITIGATION: Add a bypass in VaultShares.redeem() when VaultGuardians redeems for the guardian:
+        // @audit-issue - `if (msg.sender == i_vaultGuardians && owner == i_guardian) { /* bypass allowance */ }`
+        // @audit-issue - TRADE-OFFS CONSIDERED:
+        // @audit-issue - 1. Auto-approve in deposit: Rejected because infinite allowances are a known attack vector.
+        // @audit-issue - 2. Separate function redeemForGuardian: More invasive, requires interface changes.
+        // @audit-issue - 3. Two transactions (quit + manual redeem): Poor UX.
+        // @audit-issue - The bypass solution is preferred because it has no persistent state, requires double validation, and is controlled by the guardian.
         uint256 maxRedeemable = tokenVault.maxRedeem(msg.sender);
         uint256 numberOfAssetsReturned = tokenVault.redeem(maxRedeemable, msg.sender, msg.sender);
         return numberOfAssetsReturned;

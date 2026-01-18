@@ -144,8 +144,22 @@ contract VaultShares is ERC4626, IVaultShares, AaveAdapter, UniswapAdapter, Reen
         i_aaveAToken =
             IERC20(IPool(constructorData.aavePool).getReserveData(address(constructorData.asset)).aTokenAddress);
         i_uniswapLiquidityToken = IERC20(i_uniswapFactory.getPair(address(constructorData.asset), address(i_weth)));
-    }
+        // @audit-issue - HIGH -> IMPACT: HIGH - LIKELIHOOD: HIGH
+        // @audit-issue - When asset is WETH, this calls getPair(WETH, WETH) which returns address(0).
+        // @audit-issue - The modifier divestThenInvest calls balanceOf on address(0), causing revert.
+        // @audit-issue - This breaks quitGuardian, redeem, withdraw, and deposit for WETH vaults.
+        // @audit-issue - PoC: GuardianForkFuzzTest::testFuzz_quitGuardian() on mainnet fork.
+        // @audit-issue - RECOMMENDED MITIGATION: Use USDC as counterparty when asset is WETH:
+        // @audit-issue - `address pairToken = address(constructorData.asset) == address(i_weth) ? address(i_tokenOne) : address(i_weth);`
+        // @audit-issue - FIX: When asset is WETH, pair with USDC (i_tokenOne). Otherwise pair with WETH.
 
+        // @audit-note - Added on audit for testing purposes - UNCOMMENT TO FIX TESTS
+        // @audit-note - address pairToken = address(constructorData.asset) == address(i_weth) 
+        // @audit-note -     ? address(i_tokenOne) 
+        // @audit-note -     : address(i_weth);
+        // @audit-note - i_uniswapLiquidityToken = IERC20(i_uniswapFactory.getPair(address(constructorData.asset), pairToken));
+    }
+    
     /**
      * @notice Sets the vault as not active, which means that the vault guardian has quit
      * @notice Users will not be able to invest in this vault, however, they will be able to withdraw their deposited assets
@@ -198,7 +212,7 @@ contract VaultShares is ERC4626, IVaultShares, AaveAdapter, UniswapAdapter, Reen
 
         // @audit-issue - HIGH - IMPACT: MEDIUM - LIKELIHOOD: HIGH
         // @audit-issue - The minting of shares to the guardian and the DAO are inflating the total supply of the vault, they should be deducted from the shares to be minted to avoid dilution. After a user deposit of 100 assets, the vault will mint 100% of previewed shares to the user, but it will also mint (shares / i_guardianAndDaoCut) to the guardian and (shares / i_guardianAndDaoCut) to the DAO.
-        // @audit-issue - PoC: PENDING
+        // @audit-issue - PoC: VaultSharesTest::testSharesDilutionOnDeposit()
         // @audit-issue - RECOMMENDED MITIGATION: Deducting the guardian's and the DAO's shares from the total shares to be minted.
         _mint(i_guardian, shares / i_guardianAndDaoCut);
         _mint(i_vaultGuardians, shares / i_guardianAndDaoCut);
@@ -220,8 +234,26 @@ contract VaultShares is ERC4626, IVaultShares, AaveAdapter, UniswapAdapter, Reen
 
         emit FundsInvested();
 
+        // @audit-issue - HIGH -> IMPACT: HIGH - LIKELIHOOD: HIGH
+        // @audit-issue - Missing check for zero amount before calling adapters.
+        // @audit-issue - When uniswapAllocation=0 or aaveAllocation=0, the adapters are called with amount=0.
+        // @audit-issue - Aave rejects supply(0) with error 26 (INVALID_AMOUNT).
+        // @audit-issue - This breaks becomeGuardian and deposit for any allocation where one of them is 0.
+        // @audit-issue - PoC: GuardianForkFuzzTest::testFuzz_becomeGuardian() on mainnet fork.
+        // @audit-issue - RECOMMENDED MITIGATION: Add checks before calling adapters:
+        // @audit-issue - `if (uniswapAllocation > 0) { _uniswapInvest(...); }`
+        // @audit-issue - `if (aaveAllocation > 0) { _aaveInvest(...); }`
+
         _uniswapInvest(IERC20(asset()), uniswapAllocation);
         _aaveInvest(IERC20(asset()), aaveAllocation);
+
+        // @audit-note - Added on audit for testing purposes - UNCOMMENT TO FIX TESTS
+        // @audit-note - if (uniswapAllocation > 0) {
+        // @audit-note -     _uniswapInvest(IERC20(asset()), uniswapAllocation);
+        // @audit-note - }
+        // @audit-note - if (aaveAllocation > 0) {
+        // @audit-note -     _aaveInvest(IERC20(asset()), aaveAllocation);
+        // @audit-note - }
     }
 
     // slither-disable-start reentrancy-benign
@@ -272,6 +304,16 @@ contract VaultShares is ERC4626, IVaultShares, AaveAdapter, UniswapAdapter, Reen
         nonReentrant
         returns (uint256)
     {
+        // @audit-note - Fix for 'Guardian cannot quit because VaultGuardians calls redeem on behalf of the guardian without allowance.' issue.
+        // @audit-note - If VaultGuardians is redeeming on behalf of the guardian, bypass allowance check - UNCOMMENT TO FIX TESTS
+        // @audit-note - if (msg.sender == i_vaultGuardians && owner == i_guardian) {
+        // @audit-note -     uint256 guardianAssets = previewRedeem(shares);
+        // @audit-note -     _burn(owner, shares);
+        // @audit-note -     IERC20(asset()).transfer(receiver, guardianAssets);
+        // @audit-note -     emit Withdraw(msg.sender, receiver, owner, guardianAssets, shares);
+        // @audit-note -     return guardianAssets;
+        // @audit-note - }
+        
         uint256 assets = super.redeem(shares, receiver, owner);
         return assets;
     }

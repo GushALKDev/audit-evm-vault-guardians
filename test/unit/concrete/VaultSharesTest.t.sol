@@ -2,12 +2,11 @@
 pragma solidity 0.8.20;
 
 import {Base_Test} from "../../Base.t.sol";
+import {console2} from "forge-std/Test.sol";
 import {console} from "forge-std/console.sol";
 import {VaultShares} from "../../../src/protocol/VaultShares.sol";
 import {ERC20Mock} from "../../mocks/ERC20Mock.sol";
 import {VaultShares, IERC20} from "../../../src/protocol/VaultShares.sol";
-
-import {console} from "forge-std/console.sol";
 
 contract VaultSharesTest is Base_Test {
     uint256 mintAmount = 100 ether;
@@ -183,5 +182,58 @@ contract VaultSharesTest is Base_Test {
 
         assert(weth.balanceOf(user) > startingBalance);
         assertEq(wethVaultShares.balanceOf(user), startingSharesBalance - amoutToRedeem);
+    }
+
+    /**
+     * @notice PoC: Shares Dilution on Deposit. 
+     * The implementation creates additional shares for the Guardian and DAO without deducting them 
+     * from the user's minted shares, causing inflation and immediate dilution of the user's deposit value.
+     */
+    function testSharesDilutionOnDeposit() public hasGuardian {
+        vm.startPrank(user);
+        
+        // Calculate the expected shares for the user via previewDeposit
+        uint256 calculatedUserShares = wethVaultShares.previewDeposit(mintAmount);
+        console2.log("Expected User Shares (from preview): ", calculatedUserShares);
+
+        // Capture share balances before deposit
+        uint256 userSharesBefore = wethVaultShares.balanceOf(user);
+        uint256 guardianSharesBefore = wethVaultShares.balanceOf(wethVaultShares.getGuardian());
+        uint256 daoSharesBefore = wethVaultShares.balanceOf(wethVaultShares.getVaultGuardians());
+
+        // Perform Mint, Approve and Deposit
+        weth.mint(mintAmount, user);
+        weth.approve(address(wethVaultShares), mintAmount);
+        wethVaultShares.deposit(mintAmount, user);
+
+        // Capture share balances after deposit
+        uint256 userSharesAfter = wethVaultShares.balanceOf(user);
+        uint256 guardianSharesAfter = wethVaultShares.balanceOf(wethVaultShares.getGuardian());
+        uint256 daoSharesAfter = wethVaultShares.balanceOf(wethVaultShares.getVaultGuardians());
+
+        // Calculate Net Shares Minted
+        uint256 userNetShares = userSharesAfter - userSharesBefore;
+        uint256 guardianNetShares = guardianSharesAfter - guardianSharesBefore;
+        uint256 daoNetShares = daoSharesAfter - daoSharesBefore;
+        
+        uint256 totalMintedShares = userNetShares + guardianNetShares + daoNetShares;
+
+        // Log results
+        console2.log("--- Deposit Results ---");
+        console2.log("User Net Shares:      ", userNetShares);
+        console2.log("Guardian Net Shares:  ", guardianNetShares);
+        console2.log("DAO Net Shares:       ", daoNetShares);
+        console2.log("Total Minted Shares:  ", totalMintedShares);
+
+        // Verify logic
+        // The user should receive exactly what was previewed
+        assertEq(userNetShares, calculatedUserShares, "User did not receive expected shares");
+
+        // Calculate 'Dilution' (Extra shares minted for fees)
+        uint256 dilution = totalMintedShares - userNetShares;
+        console2.log("Dilution (Fee Shares):", dilution);
+
+        // Verify that dilution occurred (fees were minted)
+        assert(dilution > 0);
     }
 }

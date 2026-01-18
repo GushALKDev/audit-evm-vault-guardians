@@ -5,6 +5,16 @@ libs = ["lib"]
 
 remappings = ['@openzeppelin/contracts=lib/openzeppelin-contracts/contracts']
 
+[fuzz]
+runs = 1000
+seed = "0x1"
+fail_on_revert = true
+
+[invariant]
+runs = 20
+depth = 10
+fail_on_revert = false
+
 [rpc_endpoints]
 mainnet = "${RPC_URL_MAINNET}"
 

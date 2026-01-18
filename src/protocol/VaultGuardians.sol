@@ -117,4 +117,10 @@ contract VaultGuardians is Ownable, VaultGuardiansBase {
         // @audit-question - Is the owner the right address to send the funds to?
         asset.safeTransfer(owner(), amount);
     }
+    
+    // @audit-issue - HIGH -> IMPACT: HIGH -> LIKELIHOOD: HIGH
+    // @audit-issue - ETH stuck in contract & Unsafe Token Fee withdrawal.
+    // @audit-issue - ETH Fees: The contract receives ETH from `becomeGuardian` but has NO function to withdraw it. Funds are permanently locked.
+    // @audit-issue - Token Fees: If DAO fees (shares) are sent to this contract, the only way to withdraw them is check-all `sweepErc20s`, which is intended for dust/error recovery, not regular fee management.
+    // @audit-issue - RECOMMENDED MITIGATION: Add `withdrawEth()` and a dedicated `withdrawFees(token, amount)` function.
 }

@@ -59,4 +59,23 @@ contract VaultGuardiansTest is Base_Test {
 
         assertEq(balanceAfter - balanceBefore, mintAmount);
     }
+
+
+    /**
+     * @notice Demonstrates a bug in UniswapAdapter where amountADesired is calculated incorrectly.
+     * The logic double-counts the token amount, causing an `ERC20InsufficientBalance` revert.
+     */
+    function test_becomeGuardianUniswapAmountADesiredDoubled() public {
+        // There is not enough hold tokens to pay the aditional tokens needed because of the bug.
+        AllocationData memory allocationData = AllocationData(10, 190, 800);
+
+        uint256 stakePrice = vaultGuardians.getGuardianStakePrice(); // 10e18
+        deal(address(weth), user, stakePrice);
+
+        vm.startPrank(user);
+        weth.approve(address(vaultGuardians), stakePrice);
+        vm.expectRevert();
+        vaultGuardians.becomeGuardian(allocationData);
+        vm.stopPrank();
+    }
 }
