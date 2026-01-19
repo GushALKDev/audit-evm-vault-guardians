@@ -20,13 +20,13 @@ contract UniswapAdapter is AStaticUSDCData {
 
     address[] private s_pathArray;
 
-    // @audit-issue - LOW -> IMPACT: LOW - LIKELIHOOD: HIGH
-    // @audit-issue - Parameter `wethAmount` is misleading because it represents `counterPartyToken`, which isn't always WETH.
-    // @audit-issue - RECOMMENDED MITIGATION: Include the indexed token addresses in the event and use generic names like `tokenAmount` and `counterPartyTokenAmount` for better off-chain tracking.
+    // @audit-issue-written - LOW -> IMPACT: LOW - LIKELIHOOD: HIGH
+    // @audit-issue-written - Parameter `wethAmount` is misleading because it represents `counterPartyToken`, which isn't always WETH.
+    // @audit-issue-written - RECOMMENDED MITIGATION: Include the indexed token addresses in the event and use generic names like `tokenAmount` and `counterPartyTokenAmount` for better off-chain tracking.
     event UniswapInvested(uint256 tokenAmount, uint256 wethAmount, uint256 liquidity);
-    // @audit-issue - LOW -> IMPACT: LOW - LIKELIHOOD: HIGH
-    // @audit-issue - Parameter `wethAmount` is misleading because it represents `counterPartyToken`, which isn't always WETH.
-    // @audit-issue - RECOMMENDED MITIGATION: Include the indexed token addresses in the event and use generic names like `tokenAmount` and `counterPartyTokenAmount` for better off-chain tracking.
+    // @audit-issue-written - LOW -> IMPACT: LOW - LIKELIHOOD: HIGH
+    // @audit-issue-written - Parameter `wethAmount` is misleading because it represents `counterPartyToken`, which isn't always WETH.
+    // @audit-issue-written - RECOMMENDED MITIGATION: Include the indexed token addresses in the event and use generic names like `tokenAmount` and `counterPartyTokenAmount` for better off-chain tracking.
     event UniswapDivested(uint256 tokenAmount, uint256 wethAmount);
 
     constructor(address uniswapRouter, address weth, address tokenOne) AStaticUSDCData(weth, tokenOne) {
@@ -68,22 +68,22 @@ contract UniswapAdapter is AStaticUSDCData {
         // the element at index 1 is the address of the output token
         s_pathArray = [address(token), address(counterPartyToken)];
 
-        // @audit-issue - MEDIUM -> IMPACT: MEDIUM - LIKELIHOOD: LOW
-        // @audit-issue - Weird ERC20 could have weird returns.
-        // @audit-issue - RECOMMENDED MITIGATION: Use `forceApprove` from `SafeERC20` library.
+        // @audit-issue-written - MEDIUM -> IMPACT: MEDIUM - LIKELIHOOD: LOW
+        // @audit-issue-written - Weird ERC20 could have weird returns.
+        // @audit-issue-written - RECOMMENDED MITIGATION: Use `forceApprove` from `SafeERC20` library.
         bool succ = token.approve(address(i_uniswapRouter), amountOfTokenToSwap);
         if (!succ) {
             revert UniswapAdapter__TransferFailed();
         }
-        // @audit-issue - MEDIUM -> IMPACT: HIGH - LIKELIHOOD: LOW
-        // @audit-issue - Using `block.timestamp` for swap deadline offers no protection.
-        // @audit-issue - In the PoS model, proposers know well in advance if they will propose one or consecutive blocks ahead of time. In such a scenario, a malicious validator can hold back the transaction and execute it at a more favourable block number.
-        // @audit-issue - PoC: `WethFork.t.sol::testFrontRunningWithExactDeadLine()`.
-        // @audit-issue - RECOMMENDED MITIGATION: Consider allowing function caller to specify swap deadline input parameter.
-        // @audit-issue - HIGH -> IMPACT: HIGH - LIKELIHOOD: MEDIUM/HIGH
-        // @audit-issue - The `amountOutMin` hardcoded to 0 allows front-running sandwich attacks.
-        // @audit-issue - PoC: `WethFork.t.sol::testFrontRunningWithAmountOutMinZero()`.
-        // @audit-issue - RECOMMENDED MITIGATION: Use a safe `amountOutMin` value, using the price of an oracle like Chainlink. NEVER use UniswapV2Pair price, because it can be manipulated in the same block front-running your transaction.
+        // @audit-issue-written - MEDIUM -> IMPACT: HIGH - LIKELIHOOD: LOW
+        // @audit-issue-written - Using `block.timestamp` for swap deadline offers no protection.
+        // @audit-issue-written - In the PoS model, proposers know well in advance if they will propose one or consecutive blocks ahead of time. In such a scenario, a malicious validator can hold back the transaction and execute it at a more favourable block number.
+        // @audit-issue-written - PoC: `WethFork.t.sol::testFrontRunningWithExactDeadLine()`.
+        // @audit-issue-written - RECOMMENDED MITIGATION: Consider allowing function caller to specify swap deadline input parameter.
+        // @audit-issue-written - HIGH -> IMPACT: HIGH - LIKELIHOOD: MEDIUM/HIGH
+        // @audit-issue-written - The `amountOutMin` hardcoded to 0 allows front-running sandwich attacks.
+        // @audit-issue-written - PoC: `WethFork.t.sol::testFrontRunningWithAmountOutMinZero()`.
+        // @audit-issue-written - RECOMMENDED MITIGATION: Use a safe `amountOutMin` value, using the price of an oracle like Chainlink. NEVER use UniswapV2Pair price, because it can be manipulated in the same block front-running your transaction.
         uint256[] memory amounts = i_uniswapRouter.swapExactTokensForTokens({
             amountIn: amountOfTokenToSwap,
             amountOutMin: 0,
@@ -92,9 +92,9 @@ contract UniswapAdapter is AStaticUSDCData {
             deadline: block.timestamp
         });
 
-        // @audit-issue - MEDIUM -> IMPACT: MEDIUM - LIKELIHOOD: LOW
-        // @audit-issue - Weird ERC20 could have weird returns.
-        // @audit-issue - RECOMMENDED MITIGATION: Use `forceApprove` from `SafeERC20` library.
+        // @audit-issue-written - MEDIUM -> IMPACT: MEDIUM - LIKELIHOOD: LOW
+        // @audit-issue-written - Weird ERC20 could have weird returns.
+        // @audit-issue-written - RECOMMENDED MITIGATION: Use `forceApprove` from `SafeERC20` library.
         succ = counterPartyToken.approve(address(i_uniswapRouter), amounts[1]);
         if (!succ) {
             revert UniswapAdapter__TransferFailed();
@@ -105,23 +105,23 @@ contract UniswapAdapter is AStaticUSDCData {
         }
         // @audit-info - "amounts[1] should be the WETH amount we got back" is not right, amount[1] would be token or counterparty token
         // amounts[1] should be the WETH amount we got back
-        // @audit-issue - MEDIUM -> IMPACT: HIGH - LIKELIHOOD: LOW
-        // @audit-issue - Using `block.timestamp` for swap deadline offers no protection.
-        // @audit-issue - PoC: `WethFork.t.sol::testRebalanceFundsDeadlineNoProtection()`.
-        // @audit-issue - In the PoS model, proposers know well in advance if they will propose one or consecutive blocks ahead of time. In such a scenario, a malicious validator can hold back the transaction and execute it at a more favourable block number.
-        // @audit-issue - RECOMMENDED MITIGATION: Consider allowing function caller to specify swap deadline input parameter.
+        // @audit-issue-written - MEDIUM -> IMPACT: HIGH - LIKELIHOOD: LOW
+        // @audit-issue-written - Using `block.timestamp` for swap deadline offers no protection.
+        // @audit-issue-written - PoC: `WethFork.t.sol::testRebalanceFundsDeadlineNoProtection()`.
+        // @audit-issue-written - In the PoS model, proposers know well in advance if they will propose one or consecutive blocks ahead of time. In such a scenario, a malicious validator can hold back the transaction and execute it at a more favourable block number.
+        // @audit-issue-written - RECOMMENDED MITIGATION: Consider allowing function caller to specify swap deadline input parameter.
         
-        // @audit-issue - HIGH -> IMPACT: HIGH - LIKELIHOOD: MEDIUM/HIGH
-        // @audit-issue - The `amountAMin` and `amountBMin` hardcoded to 0 allow front-running sandwich attacks receiving less LP tokens than expected.
-        // @audit-issue - PoC: `WethFork.t.sol::testAddLiquidityNoSlippageProtection()`.
-        // @audit-issue - RECOMMENDED MITIGATION: Use an Oracle (like Chainlink) to calculate the correct minimum amounts properly.
+        // @audit-issue-written - HIGH -> IMPACT: HIGH - LIKELIHOOD: MEDIUM/HIGH
+        // @audit-issue-written - The `amountAMin` and `amountBMin` hardcoded to 0 allow front-running sandwich attacks receiving less LP tokens than expected.
+        // @audit-issue-written - PoC: `WethFork.t.sol::testAddLiquidityNoSlippageProtection()`.
+        // @audit-issue-written - RECOMMENDED MITIGATION: Use an Oracle (like Chainlink) to calculate the correct minimum amounts properly.
         
-        // @audit-issue - HIGH -> IMPACT: HIGH - LIKELIHOOD: HIGH
-        // @audit-issue - The `amountADesired` is misleading. It tells Uniswap we have the full initial balance available, but we only have half left after the swap.
-        // @audit-issue - If the Uniswap operation requires more tokens than we hold, the transaction will revert.
-        // @audit-issue - PoC: `VaultGuardiansFuzzTest::test_becomeGuardianUniswapAmountADesiredDoubled()`.
-        // @audit-issue - PoC RESULT: `[FAIL: ERC20InsufficientBalance(...)]`.
-        // @audit-issue - RECOMMENDED MITIGATION: Set `amountADesired` to the tokens we actually hold (`amountOfTokenToSwap`).
+        // @audit-issue-written - HIGH -> IMPACT: HIGH - LIKELIHOOD: HIGH
+        // @audit-issue-written - The `amountADesired` is misleading. It tells Uniswap we have the full initial balance available, but we only have half left after the swap.
+        // @audit-issue-written - If the Uniswap operation requires more tokens than we hold, the transaction will revert.
+        // @audit-issue-written - PoC: `VaultGuardiansFuzzTest::test_becomeGuardianUniswapAmountADesiredDoubled()`.
+        // @audit-issue-written - PoC RESULT: `[FAIL: ERC20InsufficientBalance(...)]`.
+        // @audit-issue-written - RECOMMENDED MITIGATION: Set `amountADesired` to the tokens we actually hold (`amountOfTokenToSwap`).
         (uint256 tokenAmount, uint256 counterPartyTokenAmount, uint256 liquidity) = i_uniswapRouter.addLiquidity({
             tokenA: address(token),
             tokenB: address(counterPartyToken),
@@ -133,9 +133,9 @@ contract UniswapAdapter is AStaticUSDCData {
             to: address(this),
             deadline: block.timestamp
         });
-        // @audit-issue - LOW -> IMPACT: LOW - LIKELIHOOD: HIGH
-        // @audit-issue - Reentrancy vulnerability, The event should be placed before the external calls
-        // @audit-issue - RECOMMENDED MITIGATION: Move the event emission before the external calls
+        // @audit-issue-written - LOW -> IMPACT: LOW - LIKELIHOOD: HIGH
+        // @audit-issue-written - Reentrancy vulnerability, The event should be placed before the external calls
+        // @audit-issue-written - RECOMMENDED MITIGATION: Move the event emission before the external calls
         emit UniswapInvested(tokenAmount, counterPartyTokenAmount, liquidity);
     }
 
@@ -152,24 +152,24 @@ contract UniswapAdapter is AStaticUSDCData {
         // @audit-info - Missing check for valid token
         IERC20 counterPartyToken = token == i_weth ? i_tokenOne : i_weth;
 
-        // @audit-issue - MEDIUM -> IMPACT: HIGH - LIKELIHOOD: LOW
-        // @audit-issue - Using block.timestamp for swap deadline offers no protection
-        // @audit-issue - In the PoS model, proposers know well in advance if they will propose one or consecutive blocks ahead of time. In such a scenario, a malicious validator can hold back the transaction and execute it at a more favourable block number.
-        // @audit-issue - RECOMMENDED MITIGATION: Consider allowing function caller to specify swap deadline input parameter.
+        // @audit-issue-written - MEDIUM -> IMPACT: HIGH - LIKELIHOOD: LOW
+        // @audit-issue-written - Using block.timestamp for swap deadline offers no protection
+        // @audit-issue-written - In the PoS model, proposers know well in advance if they will propose one or consecutive blocks ahead of time. In such a scenario, a malicious validator can hold back the transaction and execute it at a more favourable block number.
+        // @audit-issue-written - RECOMMENDED MITIGATION: Consider allowing function caller to specify swap deadline input parameter.
         
-        // @audit-issue - HIGH -> IMPACT: HIGH - LIKELIHOOD: MEDIUM/HIGH
-        // @audit-issue - The amount amountAMin and amountBMin hardcoded to 0 conduct to front running sandwich attacks reciving less LP tokens than expected
-        // @audit-issue - PoC: WethFork.t.sol::PENDING
-        // @audit-issue - RECOMMENDED MITIGATION: Use an Oracle (like Chainlink) to calculate the correct minimum amounts properly.
+        // @audit-issue-written - HIGH -> IMPACT: HIGH - LIKELIHOOD: MEDIUM/HIGH
+        // @audit-issue-written - The amount amountAMin and amountBMin hardcoded to 0 conduct to front running sandwich attacks reciving less LP tokens than expected
+        // @audit-issue-written - PoC: WethFork.t.sol::PENDING
+        // @audit-issue-written - RECOMMENDED MITIGATION: Use an Oracle (like Chainlink) to calculate the correct minimum amounts properly.
 
-        // @audit-issue - HIGH -> IMPACT: HIGH - LIKELIHOOD: HIGH
-        // @audit-issue - Missing `approve()` of LP tokens to the router before `removeLiquidity()`.
-        // @audit-issue - When the vault tries to divest, it calls `removeLiquidity()` which does `transferFrom`.
-        // @audit-issue - But the vault never approved the router to spend its LP tokens, causing revert.
-        // @audit-issue - This breaks `quitGuardian()`, `redeem()`, `withdraw()` for any vault with Uniswap allocation.
-        // @audit-issue - PoC: `GuardianForkFuzzTest::testFuzz_quitGuardian()` on mainnet fork.
-        // @audit-issue - RECOMMENDED MITIGATION: Add approve before removeLiquidity:
-        // @audit-issue - `IERC20(i_uniswapFactory.getPair(address(token), address(counterPartyToken))).approve(address(i_uniswapRouter), liquidityAmount);`
+        // @audit-issue-written - HIGH -> IMPACT: HIGH - LIKELIHOOD: HIGH
+        // @audit-issue-written - Missing `approve()` of LP tokens to the router before `removeLiquidity()`.
+        // @audit-issue-written - When the vault tries to divest, it calls `removeLiquidity()` which does `transferFrom`.
+        // @audit-issue-written - But the vault never approved the router to spend its LP tokens, causing revert.
+        // @audit-issue-written - This breaks `quitGuardian()`, `redeem()`, `withdraw()` for any vault with Uniswap allocation.
+        // @audit-issue-written - PoC: `GuardianForkFuzzTest::testFuzz_quitGuardian()` on mainnet fork.
+        // @audit-issue-written - RECOMMENDED MITIGATION: Add approve before removeLiquidity:
+        // @audit-issue-written - `IERC20(i_uniswapFactory.getPair(address(token), address(counterPartyToken))).approve(address(i_uniswapRouter), liquidityAmount);`
         
         // Added on audit for testing purposes - UNCOMMENT TO FIX TESTS
         // @audit-note - IERC20(i_uniswapFactory.getPair(address(token), address(counterPartyToken))).approve(address(i_uniswapRouter), liquidityAmount);
@@ -184,23 +184,23 @@ contract UniswapAdapter is AStaticUSDCData {
             deadline: block.timestamp
         });
         s_pathArray = [address(counterPartyToken), address(token)];
-        // @audit-issue - MEDIUM -> IMPACT: HIGH - LIKELIHOOD: LOW
-        // @audit-issue - Using block.timestamp for swap deadline offers no protection
-        // @audit-issue - In the PoS model, proposers know well in advance if they will propose one or consecutive blocks ahead of time. In such a scenario, a malicious validator can hold back the transaction and execute it at a more favourable block number.
-        // @audit-issue - RECOMMENDED MITIGATION: Consider allowing function caller to specify swap deadline input parameter.
-        // @audit-issue - HIGH -> IMPACT: HIGH - LIKELIHOOD: MEDIUM/HIGH
-        // @audit-issue - The amount min hardcoded to 0 conduct to front running sandwich attacks
-        // @audit-issue - PoC: WethFork.t.sol::testFrontRunningWithAmountOutMinZero()
-        // @audit-issue - RECOMMENDED MITIGATION: Use a safe amountOutMin value, using the price of an oracle like Chainlink, NEVER use UniswapV2Pair price, because it can be manipulated in the same block front running your transaction
+        // @audit-issue-written - MEDIUM -> IMPACT: HIGH - LIKELIHOOD: LOW
+        // @audit-issue-written - Using block.timestamp for swap deadline offers no protection
+        // @audit-issue-written - In the PoS model, proposers know well in advance if they will propose one or consecutive blocks ahead of time. In such a scenario, a malicious validator can hold back the transaction and execute it at a more favourable block number.
+        // @audit-issue-written - RECOMMENDED MITIGATION: Consider allowing function caller to specify swap deadline input parameter.
+        // @audit-issue-written - HIGH -> IMPACT: HIGH - LIKELIHOOD: MEDIUM/HIGH
+        // @audit-issue-written - The amount min hardcoded to 0 conduct to front running sandwich attacks
+        // @audit-issue-written - PoC: WethFork.t.sol::testFrontRunningWithAmountOutMinZero()
+        // @audit-issue-written - RECOMMENDED MITIGATION: Use a safe amountOutMin value, using the price of an oracle like Chainlink, NEVER use UniswapV2Pair price, because it can be manipulated in the same block front running your transaction
 
-        // @audit-issue - HIGH -> IMPACT: HIGH - LIKELIHOOD: HIGH
-        // @audit-issue - Missing approve of counterPartyToken to router before swapExactTokensForTokens.
-        // @audit-issue - After removeLiquidity, the vault receives counterPartyToken (USDC) that needs to be swapped back.
-        // @audit-issue - But the vault never approved the router to spend this token, causing revert.
-        // @audit-issue - This breaks quitGuardian, redeem, withdraw for any vault with Uniswap allocation.
-        // @audit-issue - PoC: GuardianForkFuzzTest::testFuzz_quitGuardian() on mainnet fork.
-        // @audit-issue - RECOMMENDED MITIGATION: Add approve before swap:
-        // @audit-issue - `counterPartyToken.approve(address(i_uniswapRouter), counterPartyTokenAmount);`
+        // @audit-issue-written - HIGH -> IMPACT: HIGH - LIKELIHOOD: HIGH
+        // @audit-issue-written - Missing approve of counterPartyToken to router before swapExactTokensForTokens.
+        // @audit-issue-written - After removeLiquidity, the vault receives counterPartyToken (USDC) that needs to be swapped back.
+        // @audit-issue-written - But the vault never approved the router to spend this token, causing revert.
+        // @audit-issue-written - This breaks quitGuardian, redeem, withdraw for any vault with Uniswap allocation.
+        // @audit-issue-written - PoC: GuardianForkFuzzTest::testFuzz_quitGuardian() on mainnet fork.
+        // @audit-issue-written - RECOMMENDED MITIGATION: Add approve before swap:
+        // @audit-issue-written - `counterPartyToken.approve(address(i_uniswapRouter), counterPartyTokenAmount);`
 
         // Added on audit for testing purposes - UNCOMMENT TO FIX TESTS
         // @audit-note - counterPartyToken.approve(address(i_uniswapRouter), counterPartyTokenAmount);
@@ -212,13 +212,13 @@ contract UniswapAdapter is AStaticUSDCData {
             to: address(this),
             deadline: block.timestamp
         });
-        // @audit-issue - LOW -> IMPACT: LOW - LIKELIHOOD: HIGH
-        // @audit-issue - Reentrancy vulnerability, The event should be placed before the external calls
-        // @audit-issue - RECOMMENDED MITIGATION: Move the event emission before the external calls
+        // @audit-issue-written - LOW -> IMPACT: LOW - LIKELIHOOD: HIGH
+        // @audit-issue-written - Reentrancy vulnerability, The event should be placed before the external calls
+        // @audit-issue-written - RECOMMENDED MITIGATION: Move the event emission before the external calls
         emit UniswapDivested(tokenAmount, amounts[1]);
-        // @audit-issue - MEDIUM -> IMPACT: MEDIUM/LOW - LIKELIHOOD: HIGH
-        // @audit-issue - amountOfAssetReturned is wrong, it should be the sum of the tokens returned by the LP and the token returned by the swap
-        // @audit-issue - RECOMMENDED MITIGATION: amountOfAssetReturned = tokenAmount + amounts[1];
+        // @audit-issue-written - MEDIUM -> IMPACT: MEDIUM/LOW - LIKELIHOOD: HIGH
+        // @audit-issue-written - amountOfAssetReturned is wrong, it should be the sum of the tokens returned by the LP and the token returned by the swap
+        // @audit-issue-written - RECOMMENDED MITIGATION: amountOfAssetReturned = tokenAmount + amounts[1];
         amountOfAssetReturned = amounts[1];
     }
     // slither-disable-end reentrancy-benign

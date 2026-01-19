@@ -18,10 +18,11 @@ broadcast
 .DS_Store
 
 # Audit info
+findings.md
 aderyn-report.md
 slither.config.json
 report.md
 findings-example.md
-logo.*
+logo.pdf
 coverage.txt
 report-layout.md

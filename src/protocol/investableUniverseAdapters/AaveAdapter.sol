@@ -26,9 +26,9 @@ contract AaveAdapter {
      * @param amount The amount of vault's underlying asset token to invest
      */
     function _aaveInvest(IERC20 asset, uint256 amount) internal {
-        // @audit-issue - MEDIUM -> IMPACT: MEDIUM - LIKELIHOOD: LOW
-        // @audit-issue - Weird ERC20 could have weird returns.
-        // @audit-issue - RECOMMENDED MITIGATION: Use `forceApprove` from `SafeERC20` library.
+        // @audit-issue-written - MEDIUM -> IMPACT: MEDIUM - LIKELIHOOD: LOW
+        // @audit-issue-written - Weird ERC20 could have weird returns.
+        // @audit-issue-written - RECOMMENDED MITIGATION: Use `forceApprove` from `SafeERC20` library.
         bool succ = asset.approve(address(i_aavePool), amount);
         if (!succ) {
             revert AaveAdapter__TransferFailed();
@@ -39,8 +39,8 @@ contract AaveAdapter {
             onBehalfOf: address(this), // decides who get's Aave's aTokens for the investment. In this case, mint it to the vault
             referralCode: 0
         });
-        // @audit-issue - LOW -> IMPACT: LOW - LIKELIHOOD: HIGH
-        // @audit-issue - Missing event
+        // @audit-issue-written - LOW -> IMPACT: LOW - LIKELIHOOD: HIGH
+        // @audit-issue-written - Missing event
 
     }
 
@@ -52,7 +52,7 @@ contract AaveAdapter {
     function _aaveDivest(IERC20 token, uint256 amount) internal returns (uint256 amountOfAssetReturned) {
         // @audit-answered-question - Is necessary this returned value?
         // @audit-answer - Yes, standard practice to return amounts. But implementation is missing assignment.
-        // @audit-issue - LOW - Missing assignment of return value from `aavePool.withdraw()`.
+        // @audit-issue-written - LOW - Missing assignment of return value from `aavePool.withdraw()`.
         amountOfAssetReturned = i_aavePool.withdraw({
             asset: address(token),
             amount: amount,
@@ -62,7 +62,7 @@ contract AaveAdapter {
         });
         // @audit-answered-question - There is a missing return value here, is it necessary?
         // @audit-answer - It is not missing, amountOfAssetReturned is the return value.
-        // @audit-issue - LOW -> IMPACT: LOW - LIKELIHOOD: HIGH
-        // @audit-issue - Missing event
+        // @audit-issue-written - LOW -> IMPACT: LOW - LIKELIHOOD: HIGH
+        // @audit-issue-written - Missing event
     }
 }
