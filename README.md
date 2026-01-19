@@ -58,6 +58,15 @@ This audit marks the beginning of my career as a security researcher, and I look
 | **Scope** | `src/protocol/`, `src/dao/`, `src/abstract/`, `src/interfaces/` |
 | **Methods** | Manual Review, Static Analysis (Slither, Aderyn), Fuzz Testing, Fork Testing |
 
+
+---
+
+## 🏗 Protocol Architecture
+
+<p align="center">
+<img src="./images/VaultGuardians_diagram.png" width="80%" alt="Vault Guardians Architecture">
+</p>
+
 ---
 
 ## 📄 Full Audit Report (PDF)
