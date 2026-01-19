@@ -1,132 +1,244 @@
-# Vault Guardians
+<p align="center">
+<img src="./images/vault-guardians.png" width="400" alt="vault-guardians">
+<br/>
+
+# 🔐 Vault Guardians Security Audit
+
+A comprehensive security audit of the **Vault Guardians** ERC4626 yield vault protocol.
+
+**Lead Security Researcher:** [GushALKDev](https://github.com/GushALKDev)
+
+---
+
+## 🎯 Personal Milestone
+
+> **This is my first independent security audit** 🎉
+
+After completing all the lessons from the **Cyfrin Security Course** and working through guided audits led by **Patrick Collins**, this audit represents a major milestone in my journey as a Smart Contract Security Researcher.
+
+I have invested significant time and effort into this audit, applying everything I've learned throughout the course:
+- **Manual code review** following systematic checklist approaches
+- **Static analysis** with Slither and Aderyn
+- **Fuzz testing** and **Fork testing** on mainnet
+- **Invariant testing** to verify protocol assumptions
+- **Attack vector identification** including MEV, reentrancy, and governance attacks
+
+I am extremely proud to have successfully completed this audit independently. The Vault Guardians protocol presented complex challenges involving ERC4626 accounting, DeFi integrations (Aave V3, Uniswap V2), and governance mechanics, all of which required deep understanding to properly analyze.
+
+This audit marks the beginning of my career as a security researcher, and I look forward to continuing to grow in this field.
+
+---
+
+## 📋 Table of Contents
+
+- [Personal Milestone](#-personal-milestone)
+- [Audit Overview](#audit-overview)
+- [📄 Full Audit Report (PDF)](#-full-audit-report-pdf)
+- [Severity Classification](#severity-classification)
+- [Executive Summary](#executive-summary)
+- [Findings](#findings)
+  - [High Severity](#-high-severity)
+  - [Medium Severity](#-medium-severity)
+  - [Low Severity](#-low-severity)
+  - [Informational](#-informational)
+  - [Gas Optimizations](#-gas-optimizations)
+- [Tools Used](#-tools-used)
+- [Lessons Learned](#-lessons-learned)
+- [Section 8: The NFT Achievement](#-section-8-the-nft-achievement)
+
+---
+
+## Audit Overview
+
+| Item | Detail |
+|------|--------|
+| **Audit Commit Hash** | `e07540037ef1dd89e2e27b090fc21f7aa6e51c4f` |
+| **Solidity Version** | `0.8.20` |
+| **Target Chain** | Ethereum |
+| **Scope** | `src/protocol/`, `src/dao/`, `src/abstract/`, `src/interfaces/` |
+| **Methods** | Manual Review, Static Analysis (Slither, Aderyn), Fuzz Testing, Fork Testing |
+
+---
+
+## 📄 Full Audit Report (PDF)
+
+> **[📥 Download the Complete Audit Report (PDF)](./audit-data/report.pdf)**
+
+The full report contains detailed findings with complete Proof of Concept code, diff patches, and comprehensive recommendations.
+
+---
+
+## Severity Classification
+
+| Severity | Impact |
+|----------|--------|
+| 🔴 **High** | Critical vulnerabilities leading to direct loss of funds or complete compromise |
+| 🟠 **Medium** | Issues causing unexpected behavior or moderate financial impact |
+| 🟡 **Low** | Minor issues that don't directly risk funds |
+| 🔵 **Info** | Best practices and code quality improvements |
+| ⚡ **Gas** | Gas optimization opportunities |
+
+---
+
+## Executive Summary
+
+The **Vault Guardians** protocol contains **critical security vulnerabilities** that make it **unsafe for production deployment**. The most severe issues are in the ERC4626 implementation, DeFi integrations, and governance token mechanics.
+
+### Key Metrics
+
+| Severity | Count |
+|----------|-------|
+| 🔴 High | 14 |
+| 🟠 Medium | 5 |
+| 🟡 Low | 7 |
+| 🔵 Info | 9 |
+| ⚡ Gas | 3 |
+| **Total** | **38** |
+
+### Critical Risks
+
+- ⚠️ **Free Share Minting** - Missing `mint()` override allows attackers to mint shares for ~0 cost when funds are invested.
+- ⚠️ **DAO Takeover** - Guardians can farm unlimited VGT tokens by repeatedly becoming/quitting guardian.
+- ⚠️ **Broken Uniswap Operations** - Missing LP token approvals cause all divest operations to revert.
+- ⚠️ **WETH Vault DoS** - Pair calculation returns address(0) for WETH vaults, breaking all operations.
+- ⚠️ **Sandwich Attack Exposure** - `amountOutMin=0` in all Uniswap swaps enables MEV extraction.
+
+---
+
+## Findings
+
+### 🔴 High Severity
+
+| ID | Finding |
+|----|---------|
+| H-1 | Missing Override of `mint()` Enables Free Share Minting and Vault Draining |
+| H-2 | Guardians Can Infinitely Mint VaultGuardianTokens and Take Over DAO |
+| H-3 | Missing LP Token Approval Breaks Uniswap Divest Operations |
+| H-4 | WETH Vault Pair Calculation Returns `address(0)`, Breaking Core Functions |
+| H-5 | Missing Zero Check for Allocations Causes Aave Revert |
+| H-6 | Lack of Slippage Protection (`amountOutMin=0`) Enables Sandwich Attacks |
+| H-7 | Guardian Cannot Quit Due to Missing Allowance for Redemption |
+| H-8 | ETH Fees Permanently Locked in Contract |
+| H-9 | `GUARDIAN_FEE` Is Not Collected in `becomeGuardian()` |
+| H-10 | `s_guardianStakePrice` Scaling Issue Causes DoS for Low-Decimal Tokens (USDC) |
+| H-11 | Overwriting Active Vaults Locks Funds |
+| H-12 | `amountADesired` Double-Counting Can Cause `addLiquidity` to Revert |
+| H-13 | Deleting Guardian Mapping Orphans Vault |
+| H-14 | Users Immediate Dilution on Deposit |
+
+---
+
+### 🟠 Medium Severity
+
+| ID | Finding |
+|----|---------|
+| M-1 | `votingDelay()` and `votingPeriod()` Return Seconds Instead of Blocks |
+| M-2 | Using `block.timestamp` for Deadline Offers No MEV Protection |
+| M-3 | Weird ERC20 Tokens May Cause `approve()` to Fail |
+| M-4 | Missing Validation for `newCut` Can Cause DoS |
+| M-5 | Updating Allocation Without Rebalancing Creates Discrepancy |
+
+---
+
+### 🟡 Low Severity
+
+| ID | Finding |
+|----|---------|
+| L-1 | Incorrect Vault Name and Symbol for `i_tokenTwo` (LINK) |
+| L-2 | Missing Return Value Assignment in `_aaveDivest()` |
+| L-3 | Wrong Error Name in `quitGuardian()` |
+| L-4 | `nonReentrant` Modifier Should Be First |
+| L-5 | Events Emitted After State Changes |
+| L-6 | Missing Events in Critical Functions |
+| L-7 | Event Emits Updated Value Instead of Old Value |
+
+---
+
+### 🔵 Informational
+
+| ID | Finding |
+|----|---------|
+| I-1 | Unused Interfaces and Custom Errors Should Be Removed |
+| I-2 | Centralization Risks |
+| I-3 | Multiple Typos in Function Names and Event Names |
+| I-4 | Missing NatSpec Documentation |
+| I-5 | Test Coverage Should Be Improved |
+| I-6 | Incompatibility with Fee-on-Transfer Tokens |
+| I-7 | Missing `indexed` Parameters in Events |
+| I-8 | Solidity 0.8.20 May Not Be Compatible With All L2 Networks |
+| I-9 | Missing Zero Amount Checks |
+
+---
+
+### ⚡ Gas Optimizations
+
+| ID | Finding |
+|----|---------|
+| G-1 | Functions Could Be Marked `external` |
+| G-2 | Modifiers Can Be Wrapped in Internal Functions |
+| G-3 | Cache State Variables in Loops |
+
+---
+
+## 🛠 Tools Used
+
+| Tool | Purpose |
+|------|---------|
+| [Foundry](https://github.com/foundry-rs/foundry) | Testing, Fuzz testing & Fork testing |
+| [Slither](https://github.com/crytic/slither) | Static analysis |
+| [Aderyn](https://github.com/Cyfrin/aderyn) | Smart contract analyzer |
+| Manual Review | Systematic code review with checklist |
+
+---
+
+## 📚 Lessons Learned
+
+1. **ERC4626 Override Completeness** - When extending ERC4626, ensure ALL entry points (`deposit`, `mint`, `withdraw`, `redeem`) are properly overridden if custom logic is needed. The `mint()` oversight was the root cause of the most critical vulnerability.
+
+2. **`totalAssets()` Accuracy** - For yield vaults that invest funds externally, `totalAssets()` must account for invested amounts, not just local balance. This is fundamental for correct share/asset calculations.
+
+3. **Governance Token Economics** - Tokens minted to users should be burned when they exit, or use vesting schedules. Otherwise, infinite minting attacks become trivial.
+
+4. **DeFi Integration Testing** - Always test integrations against real protocols (Aave, Uniswap) via fork testing. Mock contracts often hide critical issues like approval requirements.
+
+5. **Slippage Protection** - Never use `amountOutMin=0` or `deadline=block.timestamp` in production. These are the most common MEV attack vectors.
+
+6. **Access Control in Vault Redemptions** - When a contract redeems on behalf of users, ensure proper allowance handling or implement explicit bypass mechanisms.
+
+7. **Systematic Approach** - Using a structured methodology (Manual → Static Analysis → Fuzz → Fork testing) ensures comprehensive coverage and catches issues that single tools miss.
+
+---
+
+## 🏆 Section 8: The NFT Achievement
 
 <p align="center">
-<img src="./vault-guardians.png" width="400" alt="vault-guardians">
+<img src="./images/S8_NFT.png" width="300" alt="Section 8 NFT Achievement">
 </p>
 
-- [Vault Guardians](#vault-guardians)
-  - [About](#about)
-  - [User flow](#user-flow)
-  - [The DAO](#the-dao)
-  - [Summary](#summary)
-- [Getting Started](#getting-started)
-  - [Requirements](#requirements)
-  - [Quickstart](#quickstart)
-    - [Optional Gitpod](#optional-gitpod)
-- [Usage](#usage)
-  - [Testing](#testing)
-    - [Test Coverage](#test-coverage)
-- [Misc](#misc)
-- [Audit Scope Details](#audit-scope-details)
+### 🎮 The Challenge
 
-## About
+As part of the **Cyfrin Security Course**, Section 8 presented the ultimate test: **complete a full independent security audit of the Vault Guardians protocol**. Unlike previous sections where challenges could be solved with specific exploits or code snippets, this section required:
 
-This protocol allows users to deposit certain ERC20s into an [ERC4626 vault](https://eips.ethereum.org/EIPS/eip-4626) managed by a human being, or a `vaultGuardian`. The goal of a `vaultGuardian` is to manage the vault in a way that maximizes the value of the vault for the users who have despoited money into the vault.
+- A comprehensive security review of the entire codebase
+- Identification of all vulnerability classes (High, Medium, Low, Info, Gas)
+- Professional-quality audit report with PoCs and mitigations
+- Deep understanding of ERC4626, Aave V3, and Uniswap V2 integrations
 
-You can think of a `vaultGuardian` as a fund manager.
+### ✅ Challenge Completed
 
-To prevent a vault guardian from running off with the funds, the vault guardians are only allowed to deposit and withdraw the ERC20s into specific protocols. 
+By successfully completing this audit with **38 findings** (including 14 High severity), I have earned the **Section 8 Achievement NFT**, marking the completion of all practical challenges in the Cyfrin Security Course.
 
-- [Aave v3](https://aave.com/) 
-- [Uniswap v2](https://uniswap.org/) 
-- None (just hold) 
+This NFT represents not just technical knowledge, but the ability to apply security concepts independently on real-world protocol architectures.
 
-These 2 protocols (plus "none" makes 3) are known as the "investable universe".
+---
 
-The guardian can move funds in and out of these protocols as much as they like, but they cannot move funds to any other address.
+## 🙏 Acknowledgments
 
-The goal of a vault guardian, is to move funds in and out of these protocols to gain the most yield. Vault guardians charge a performance fee, the better the guardians do, the larger fee they will earn. 
+Special thanks to:
+- **Patrick Collins** and the **Cyfrin** team for the incredible Security Course
+- All the Web3 security researchers sharing knowledge
 
-Anyone can become a Vault Guardian by depositing a certain amount of the ERC20 into the vault. This is called the `guardian stake`. If a guardian wishes to stop being a guardian, they give out all user deposits and withdraw their guardian stake.
+---
 
-Users can then move their funds between vault managers as they see fit. 
-
-The protocol is upgradeable so that if any of the platforms in the investable universe change, or we want to add more, we can do so.
-
-## User flow
-
-1. User deposits an ERC20 into a guardian's vault
-2. The guardian automatically move the funds based on their strategy 
-3. The guardian can update the settings of their strategy at any time and move the funds
-4. To leave the pool, a user just calls `redeem` or `withdraw`
-
-## The DAO
-
-Guardians can earn DAO tokens by becoming guardians. The DAO is responsible for:
-- Updating pricing parameters
-- Getting a cut of all performance of all guardians
-
-## Summary
-
-Users can stake some ERC20s to become a vault guardian. Other users can allocate them funds in order to maximize yield. The guardians can move the funds between Uniswap, Aave, or just hold the funds. The guardians are incentivized to maximize yield, as they earn a performance fee.
-
-# Getting Started
-
-## Requirements
-
-- [git](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git)
-  - You'll know you did it right if you can run `git --version` and you see a response like `git version x.x.x`
-- [foundry](https://getfoundry.sh/)
-  - You'll know you did it right if you can run `forge --version` and you see a response like `forge 0.2.0 (816e00b 2023-03-16T00:05:26.396218Z)`
-
-## Quickstart
-
-```
-git clone https://github.com/Cyfrin/8-vault-guardians-audit
-cd 8-vault-guardians-audit
-make 
-```
-
-### Optional Gitpod
-
-If you can't or don't want to run and install locally, you can work with this repo in Gitpod. If you do this, you can skip the `clone this repo` part.
-
-[![Open in Gitpod](https://gitpod.io/button/open-in-gitpod.svg)](https://gitpod.io/#github.com/Cyfrin/8-vault-guardians-audit)
-
-# Usage
-
-## Testing
-
-Set the `RPC_URL_MAINNET` environment variable with the URL of a mainnet RPC node. It's used for tests that fork Ethereum mainnet state.
-
-Then run:
-
-```
-forge test
-```
-
-### Test Coverage
-
-```
-forge coverage
-```
-
-and for coverage based testing: 
-
-```
-forge coverage --report debug
-```
-
-# Misc
-
-- [Art made with asciiart.eu](https://www.asciiart.eu/text-to-ascii-art)
-- [headers from t11/headers](https://github.com/transmissions11/headers)
-
-# Audit Scope Details
-
-- Commit Hash: xx
-- In Scope:
-```
-
-```
-- Solc Version: 0.8.20
-- Chain(s) to deploy contract to: Ethereum
-- Tokens:
-  - weth: https://etherscan.io/token/0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2
-  - link: https://etherscan.io/token/0x514910771af9ca656af840dff83e8264ecf986ca
-  - usdc: https://etherscan.io/token/0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
-
-# Known issues 
-- All issues in the `audit-data` folder are considered known
-- We are aware that USDC is behind a proxy and is susceptible to being paused and upgraded. Please assume for this audit that is not the case.  
+Made with ❤️ by **GushALKDev** | First Independent Security Audit Completed 🎉
 
